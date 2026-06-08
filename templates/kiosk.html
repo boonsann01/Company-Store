@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Company Store</title>
+<style>
+:root{
+  --bg:#04060F;
+  --surface:rgba(255,255,255,.09);--surface-alt:rgba(255,255,255,.05);
+  --accent:#007AFF;--accent-dark:#0051D5;
+  --text:#FFFFFF;--muted:rgba(255,255,255,.5);
+  --border:rgba(255,255,255,.13);--btn:rgba(255,255,255,.1);--hover:rgba(255,255,255,.18);
+  --danger:#FF3B30;--success:#34C759;
+  --glass-blur:blur(24px) saturate(180%);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{width:100%;height:100%;overflow:hidden}
+body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;
+  color:var(--text)}
+
+/* ── Persistent Shader Background ── */
+#shader-bg{position:fixed;inset:0;width:100%;height:100%;z-index:0;
+  filter:blur(90px) saturate(170%);pointer-events:none}
+
+/* ── Screens ── */
+.screen{position:fixed;inset:0;z-index:1;display:none}
+.screen.active{display:flex}
+.screen .inner{width:100%;height:100%;display:flex}
+
+/* ── Shutter ── */
+#shutter{position:fixed;inset:0;z-index:999;display:none;pointer-events:none}
+
+/* ── Buttons ── */
+.btn-primary{background:var(--accent);color:#fff;border:none;border-radius:24px;
+  font-weight:700;cursor:pointer;transition:background .15s,transform .1s;font-family:inherit}
+.btn-primary:active{background:var(--accent-dark);transform:scale(.97)}
+.btn-ghost{background:rgba(255,255,255,.1);color:#fff;
+  border:1px solid rgba(255,255,255,.18);border-radius:20px;
+  backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+  font-weight:600;cursor:pointer;padding:10px 22px;font-size:15px;
+  transition:background .15s;font-family:inherit}
+.btn-ghost:active{background:rgba(255,255,255,.22)}
+.btn-danger{background:var(--danger);color:#fff;border:none;border-radius:18px;
+  font-weight:700;cursor:pointer;padding:8px 16px;font-size:13px;
+  font-family:inherit;transition:opacity .12s}
+.btn-danger:active{opacity:.85}
+.btn-sm{padding:8px 16px;font-size:13px;font-weight:700;border-radius:16px;
+  cursor:pointer;border:none;font-family:inherit;transition:all .12s}
+.btn-sm.ghost{background:rgba(255,255,255,.1);color:#fff;
+  border:1px solid rgba(255,255,255,.15);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.btn-sm.ghost:active{background:rgba(255,255,255,.22)}
+
+/* ══ START SCREEN — SHADER HERO ═════════════════════ */
+#screen-start{flex-direction:column}
+
+/* Radial vignette deepens edges on start screen */
+#screen-start::after{content:'';position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(ellipse 90% 90% at 50% 50%,
+    transparent 0%,rgba(4,6,15,.55) 100%)}
+
+/* ── Hero center ── */
+.hero-center{position:relative;z-index:2;flex:1;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;text-align:center;padding:0 80px}
+.hero-eyebrow{font-size:11px;font-weight:800;letter-spacing:.22em;
+  color:rgba(100,170,255,.75);text-transform:uppercase;margin-bottom:4px}
+.hero-title{font-size:90px;font-weight:900;color:#fff;
+  letter-spacing:-3px;line-height:.95;
+  text-shadow:0 0 120px rgba(50,120,255,.45),0 2px 40px rgba(0,0,0,.6)}
+/* Cycling subtitle */
+.hero-sub-wrap{height:30px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;margin-top:6px}
+.hero-sub{font-size:15px;font-weight:800;color:rgba(120,185,255,.85);
+  text-transform:uppercase;letter-spacing:.22em;white-space:nowrap;line-height:1;display:block;
+  text-shadow:0 0 18px rgba(80,160,255,.55),0 0 40px rgba(60,120,255,.25);
+  transition:opacity .3s ease, transform .38s cubic-bezier(.22,1,.36,1)}
+.hero-cta{background:linear-gradient(135deg,#007AFF,#0051D5);color:#fff;
+  border:none;border-radius:32px;font-size:24px;font-weight:800;
+  padding:20px 76px;cursor:pointer;margin-top:20px;
+  box-shadow:0 0 55px rgba(0,122,255,.5),0 8px 32px rgba(0,0,0,.45);
+  transition:transform .14s,box-shadow .14s;font-family:inherit}
+.hero-cta:active{transform:scale(.96);
+  box-shadow:0 0 28px rgba(0,122,255,.35),0 4px 16px rgba(0,0,0,.4)}
+.hero-hint{font-size:13px;color:rgba(255,255,255,.25);margin-top:-6px}
+
+/* ── Bottom bar (news + feedback) ── */
+.hero-bottom{position:relative;z-index:2;display:flex;
+  align-items:flex-end;justify-content:space-between;
+  padding:0 28px 26px;width:100%;flex-shrink:0;gap:20px}
+
+/* Frosted glass news card */
+.news-glass{background:rgba(255,255,255,.07);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,.11);border-radius:22px;
+  padding:18px 22px;max-width:600px;overflow:hidden}
+.news-glass-label{font-size:11px;font-weight:800;letter-spacing:.2em;
+  color:rgba(100,170,255,.8);text-transform:uppercase;margin-bottom:12px}
+.news-glass-item{margin-bottom:10px}
+.news-glass-item:last-child{margin-bottom:0}
+.news-glass-date{font-size:11px;font-weight:700;letter-spacing:.06em;
+  color:rgba(100,170,255,.8);margin-bottom:5px;font-variant-numeric:tabular-nums}
+.news-glass-msg{font-size:14px;color:rgba(255,255,255,.72);line-height:1.45;font-weight:500}
+
+/* Frosted glass feedback button */
+.feedback-ghost{background:rgba(255,255,255,.08);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,.16);border-radius:26px;
+  color:rgba(255,255,255,.72);font-size:15px;font-weight:700;
+  padding:14px 26px;cursor:pointer;white-space:nowrap;
+  transition:background .15s,color .15s;font-family:inherit;flex-shrink:0}
+.feedback-ghost:active{background:rgba(255,255,255,.18);color:#fff}
+
+/* ══ CHECKOUT SCREEN ════════════════════════════════ */
+#screen-checkout .inner{/* filled by .screen .inner */}
+.checkout-left{flex:1 1 0;min-width:0;display:flex;flex-direction:column;
+  padding:20px 12px 20px 24px;gap:10px;overflow:hidden}
+.co-header{display:flex;justify-content:space-between;align-items:center}
+.section-title{font-size:32px;font-weight:800;color:#fff;
+  text-shadow:0 2px 20px rgba(0,0,0,.5)}
+/* ── Category bar — animated sliding pill (21st.dev style) ── */
+.category-bar{
+  display:flex;gap:0;overflow-x:auto;padding:5px;
+  scrollbar-width:none;flex-shrink:0;-webkit-overflow-scrolling:touch;
+  position:relative;
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.11);
+  border-radius:20px;
+  backdrop-filter:blur(24px) saturate(160%);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 2px 16px rgba(0,0,0,.25)}
+.category-bar::-webkit-scrollbar{display:none}
+/* Sliding indicator pill */
+#cat-indicator{
+  position:absolute;top:5px;left:0;width:0;
+  height:calc(100% - 10px);
+  border-radius:14px;
+  background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.26);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  box-shadow:0 2px 12px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.22);
+  transition:left .3s cubic-bezier(.4,0,.2,1),width .3s cubic-bezier(.4,0,.2,1);
+  pointer-events:none;z-index:0}
+.pill{
+  flex-shrink:0;padding:9px 24px;border-radius:14px;
+  border:none;background:transparent;
+  cursor:pointer;font-weight:600;font-size:14px;letter-spacing:.01em;
+  font-family:inherit;color:rgba(255,255,255,.45);
+  position:relative;z-index:1;white-space:nowrap;
+  transition:color .22s ease}
+.pill.active{color:#fff;font-weight:750}
+.pill:not(.active):hover{color:rgba(255,255,255,.78)}
+.pill:not(.active):active{color:rgba(255,255,255,.9)}
+.item-grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);
+  gap:12px;align-content:start;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.item-grid::-webkit-scrollbar{display:none}
+/* ── Item Cards (liquid glass style) ── */
+.item-card{background:rgba(255,255,255,.09);border-radius:20px;overflow:hidden;
+  cursor:pointer;border:1.5px solid rgba(255,255,255,.14);user-select:none;
+  backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
+  box-shadow:0 4px 22px rgba(0,0,0,.35);
+  transition:transform .13s,box-shadow .13s,border-color .13s;
+  display:flex;flex-direction:column}
+.item-card:active{transform:scale(.96)}
+.item-card.in-cart{border-color:var(--accent);box-shadow:0 6px 28px rgba(0,122,255,.45)}
+.item-card.no-stock{opacity:.4;cursor:default;filter:grayscale(.9)}
+.sold-out-overlay{position:absolute;inset:0;z-index:3;
+  background:rgba(10,10,10,.65);display:flex;
+  align-items:center;justify-content:center}
+.sold-out-stamp{background:#FF3B30;color:#fff;font-size:13px;font-weight:900;
+  letter-spacing:.13em;padding:6px 13px;border-radius:5px;
+  transform:rotate(-9deg);
+  border:2px solid rgba(255,255,255,.35);
+  text-shadow:0 1px 3px rgba(0,0,0,.4)}
+
+/* Visual header */
+.card-visual{height:96px;position:relative;display:flex;
+  align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+.card-visual::after{content:'';position:absolute;inset:0;
+  background:linear-gradient(to bottom,transparent 40%,rgba(0,0,0,.22))}
+.card-emoji{font-size:46px;z-index:1;
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.35));line-height:1}
+
+/* In-cart overlay — #090681 tint from the design reference */
+.card-overlay{position:absolute;inset:0;z-index:2;
+  background:rgba(9,6,129,.55);display:flex;
+  align-items:center;justify-content:center}
+.cart-qty-bubble{width:40px;height:40px;border-radius:50%;
+  background:#fff;color:#090681;font-size:20px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 10px rgba(0,0,0,.25)}
+
+/* Low-stock shimmer band */
+.low-band{position:absolute;bottom:0;left:0;right:0;z-index:3;
+  background:rgba(255,59,48,.82);color:#fff;font-size:10px;
+  font-weight:800;text-align:center;padding:2px 0;letter-spacing:.04em}
+
+/* Card body */
+.card-body-inner{padding:10px 12px 12px;display:flex;
+  flex-direction:column;gap:2px;flex:1}
+.item-name{font-size:13px;font-weight:700;line-height:1.3;
+  color:#fff;overflow:hidden;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical}
+.item-price{font-size:18px;font-weight:800;color:var(--accent);margin-top:2px}
+.card-footer-row{display:flex;justify-content:space-between;
+  align-items:center;margin-top:4px}
+.item-stock{font-size:11px;color:rgba(255,255,255,.55);font-weight:500}
+.add-btn{width:30px;height:30px;border-radius:15px;background:var(--accent);
+  color:#fff;border:none;font-size:20px;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;line-height:1;
+  transition:background .1s,transform .1s;flex-shrink:0}
+.add-btn:active{background:var(--accent-dark);transform:scale(.9)}
+.no-items{color:rgba(255,255,255,.5);font-weight:600;padding:20px;grid-column:1/-1}
+
+/* Cart — liquid glass panel */
+.cart-panel{flex:0 0 260px;width:260px;
+  background:rgba(255,255,255,.07);
+  backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
+  border-left:1px solid rgba(255,255,255,.12);
+  display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.cart-head{display:flex;justify-content:space-between;align-items:center;
+  padding:20px 16px 10px;flex-shrink:0}
+.cart-title{font-size:24px;font-weight:800;color:#fff}
+.btn-icon{width:34px;height:34px;border-radius:17px;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  cursor:pointer;font-size:14px;font-weight:700;color:#fff;
+  transition:background .12s,color .12s,border-color .12s;font-family:inherit}
+.btn-icon:hover{background:var(--danger);color:#fff;border-color:var(--danger)}
+.cancel-menu{display:flex;gap:6px;padding:0 16px 10px;flex-shrink:0}
+.cancel-menu.hidden{display:none}
+.cart-list{flex:1;overflow-y:auto;padding:0 10px;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.cart-list::-webkit-scrollbar{display:none}
+.empty-cart{text-align:center;color:rgba(255,255,255,.45);font-size:15px;
+  font-weight:600;padding:28px 0}
+.cart-item{display:grid;grid-template-columns:26px 26px 1fr auto;align-items:center;
+  gap:6px;background:rgba(255,255,255,.07);border-radius:14px;
+  border:1px solid rgba(255,255,255,.12);padding:8px 10px;margin-bottom:8px}
+.qty-badge{width:26px;height:26px;border-radius:13px;background:var(--accent);
+  color:#fff;font-size:12px;font-weight:700;display:flex;
+  align-items:center;justify-content:center;flex-shrink:0}
+.qty-minus{width:26px;height:26px;border-radius:13px;
+  background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.2);
+  color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;
+  align-items:center;justify-content:center;flex-shrink:0;
+  transition:background .1s,color .1s,border-color .1s;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  font-family:inherit;line-height:1}
+.qty-minus:active{background:var(--danger);color:#fff;border-color:var(--danger)}
+.ci-name{font-size:13px;font-weight:700;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#fff}
+.ci-total{font-size:13px;font-weight:700;flex-shrink:0;color:#fff}
+.cart-foot{padding:14px 16px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.1)}
+.warn-text{font-size:13px;font-weight:700;color:var(--danger);
+  min-height:18px;margin-bottom:8px;text-align:center;line-height:1.3}
+.cart-total{font-size:26px;font-weight:800;text-align:center;margin-bottom:12px;color:#fff}
+.btn-checkout{width:100%;padding:14px;font-size:17px;border-radius:20px}
+
+/* ══ CONFIRM SCREEN ═════════════════════════════════ */
+#screen-confirm .inner{justify-content:center;align-items:center}
+.confirm-panel{
+  width:min(640px,92vw);
+  background:rgba(255,255,255,.08);
+  backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
+  border:1px solid rgba(255,255,255,.13);border-radius:28px;
+  padding:40px 46px;box-shadow:0 8px 56px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;max-height:90vh;overflow-y:auto;scrollbar-width:none}
+.confirm-panel::-webkit-scrollbar{display:none}
+.confirm-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+.confirm-title{font-size:34px;font-weight:900;color:#fff;letter-spacing:-.4px}
+.confirm-rows{display:flex;flex-direction:column;gap:12px;margin-bottom:20px;
+  max-height:44vh;overflow-y:auto;scrollbar-width:none}
+.confirm-rows::-webkit-scrollbar{display:none}
+/* 3-column pill: qty | name | price */
+.confirm-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;
+  gap:20px;padding:20px 26px;
+  background:rgba(255,255,255,.10);
+  border:1.5px solid rgba(255,255,255,.18);border-radius:24px;
+  box-shadow:0 3px 20px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.08);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.confirm-row-qty{font-size:24px;font-weight:900;
+  color:rgba(140,200,255,.88);white-space:nowrap;
+  text-shadow:0 0 16px rgba(100,170,255,.45)}
+.confirm-row-name{font-size:20px;font-weight:800;color:#fff;
+  line-height:1.25;word-break:break-word}
+.confirm-row-price{font-size:26px;font-weight:900;
+  color:rgba(140,200,255,.92);text-align:right;white-space:nowrap;
+  text-shadow:0 0 18px rgba(100,170,255,.4)}
+.confirm-total-row{display:flex;justify-content:space-between;align-items:center;
+  padding:20px 0 24px;border-top:1.5px solid rgba(255,255,255,.15);
+  font-size:32px;font-weight:900;letter-spacing:-.5px}
+.confirm-total-row span:first-child{color:rgba(255,255,255,.65)}
+.btn-venmo{width:100%;padding:18px;font-size:18px;font-weight:800;border-radius:24px;
+  letter-spacing:.01em;
+  background:linear-gradient(135deg,#008CFF,#0055CC);
+  box-shadow:0 0 32px rgba(0,130,255,.45),0 6px 22px rgba(0,0,0,.4);
+  border:none;color:#fff;font-family:inherit;cursor:pointer;
+  transition:filter .14s,transform .1s}
+.btn-venmo:active{filter:brightness(.88);transform:scale(.97)}
+.btn-venmo:disabled{opacity:.5;cursor:default;transform:none}
+/* QR phase */
+#confirm-qr-phase{display:none;flex-direction:column;align-items:center;
+  gap:18px;text-align:center}
+.qr-wrap{background:#fff;border-radius:18px;padding:14px;
+  box-shadow:0 0 40px rgba(255,255,255,.15);display:inline-flex}
+.qr-wrap img{display:block;border-radius:6px}
+.confirm-amount-big{font-size:48px;font-weight:900;color:#fff;
+  letter-spacing:-2px;text-shadow:0 0 40px rgba(100,180,255,.4)}
+.confirm-qr-hint{font-size:14px;color:rgba(255,255,255,.55);max-width:300px;line-height:1.5}
+.btn-done{width:100%;padding:15px;font-size:17px;font-weight:800;border-radius:22px;
+  background:linear-gradient(135deg,rgba(52,199,89,.9),rgba(36,155,66,.9));
+  border:none;color:#fff;font-family:inherit;cursor:pointer;
+  box-shadow:0 0 24px rgba(52,199,89,.35);transition:filter .14s,transform .1s}
+.btn-done:active{filter:brightness(.88);transform:scale(.97)}
+.btn-done:disabled{background:rgba(255,255,255,.12);box-shadow:none;
+  color:rgba(255,255,255,.35);cursor:default;transform:none;filter:none}
+
+/* ══ SUGGESTION SCREEN ══════════════════════════════ */
+#screen-suggestion .inner{flex-direction:column;padding:22px 30px}
+.sug-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.sug-header h2{font-size:32px;font-weight:800;color:#fff;
+  text-shadow:0 2px 20px rgba(0,0,0,.5)}
+.sug-body{flex:1;
+  background:rgba(255,255,255,.08);
+  backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
+  border:1px solid rgba(255,255,255,.13);border-radius:28px;
+  padding:22px;display:flex;flex-direction:column;
+  gap:12px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.prompt{font-size:19px;font-weight:700;color:#fff}
+.sug-input{background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.16);border-radius:16px;
+  padding:14px;font-size:18px;color:#fff;
+  resize:none;font-family:inherit;height:80px;outline:none;line-height:1.5}
+.sug-input::placeholder{color:rgba(255,255,255,.35)}
+.sug-input:focus{border-color:var(--accent)}
+.touch-kb{flex-shrink:0;display:flex;flex-direction:column;gap:5px;align-items:center}
+.key-row{display:flex;gap:4px}
+.key{height:40px;border-radius:12px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.1);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  font-size:15px;font-weight:700;width:50px;
+  cursor:pointer;transition:background .09s,transform .07s;
+  font-family:inherit;color:#fff}
+.key:active{background:rgba(255,255,255,.28);transform:scale(.93)}
+.key-wide{width:86px}
+.key-space{width:300px}
+.key-shift-on{background:var(--accent)!important;color:#fff!important;
+  border-color:var(--accent)!important;backdrop-filter:none!important}
+.sug-foot{display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.status{font-size:15px;font-weight:700;color:#fff}
+.ok{color:var(--success)} .err{color:var(--danger)}
+
+/* ══ IDLE / SCREENSAVER ══════════════════════════════ */
+#screen-idle{position:fixed;inset:0;z-index:10;display:none;
+  background:#04060F;cursor:pointer}
+#screen-idle.visible{display:block}
+#idle-canvas{position:absolute;inset:0;width:100%;height:100%;
+  filter:blur(88px) saturate(165%);z-index:0}
+/* Dashed orbit ring */
+#idle-ring-svg{position:absolute;inset:0;width:100%;height:100%;
+  z-index:1;pointer-events:none;overflow:visible}
+/* Orbital text bubbles */
+.idle-bubble{position:absolute;transform:translate(-50%,-50%);
+  z-index:2;pointer-events:none;white-space:nowrap;
+  background:rgba(255,255,255,.08);
+  backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);
+  border:1px solid rgba(255,255,255,.13);border-radius:40px;
+  padding:14px 30px;font-size:14px;font-weight:900;
+  letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(255,255,255,.55);
+  transition:background .45s,border-color .45s,box-shadow .45s,
+             color .45s,transform .45s}
+.idle-bubble.active{
+  background:rgba(255,255,255,.17);border-color:rgba(255,255,255,.38);
+  color:#fff;
+  box-shadow:0 0 38px rgba(110,180,255,.48),0 0 75px rgba(70,140,255,.22);
+  transform:translate(-50%,-50%) scale(1.1)}
+/* Barbarian cursor figure */
+#idle-cursor{position:absolute;z-index:3;pointer-events:none;
+  width:40px;height:64px;transform:translate(-50%,-50%);
+  transition:filter .18s ease;
+  filter:drop-shadow(0 0 8px rgba(140,200,255,.65))
+         drop-shadow(0 0 18px rgba(80,140,255,.35))}
+#idle-cursor.slashing{
+  filter:drop-shadow(0 0 18px rgba(255,255,255,.95))
+         drop-shadow(0 0 38px rgba(160,220,255,1))
+         drop-shadow(0 0 65px rgba(80,150,255,.7))}
+/* Center hovering text cluster */
+#idle-center{position:absolute;z-index:2;pointer-events:none;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  transform:translate(-50%,-50%)}
+#idle-tap{font-size:21px;font-weight:800;letter-spacing:.04em;
+  color:rgba(255,255,255,.78);text-align:center;white-space:nowrap;
+  text-shadow:0 0 32px rgba(140,200,255,.55),0 0 65px rgba(80,150,255,.28)}
+#idle-sub-wrap{height:24px;overflow:hidden;display:flex;
+  align-items:center;justify-content:center}
+#idle-phrase{font-size:12px;font-weight:900;letter-spacing:.3em;
+  text-transform:uppercase;color:rgba(110,175,255,.8);
+  white-space:nowrap;display:block;
+  text-shadow:0 0 14px rgba(100,170,255,.5);
+  transition:opacity .3s ease, transform .36s cubic-bezier(.22,1,.36,1)}
+</style>
+</head>
+<body>
+
+<!-- Persistent animated shader background (z-index:0, below all screens) -->
+<canvas id="shader-bg"></canvas>
+
+<!-- Shutter transition canvas -->
+<canvas id="shutter"></canvas>
+
+<!-- ══ IDLE / SCREENSAVER ══ -->
+<div id="screen-idle" onclick="onIdleTouch()">
+  <canvas id="idle-canvas"></canvas>
+
+  <!-- Dashed orbit ring -->
+  <svg id="idle-ring-svg">
+    <circle id="idle-ring-circle" fill="none"
+      stroke="rgba(255,255,255,0.07)" stroke-width="1.5" stroke-dasharray="6 14"/>
+  </svg>
+
+  <!-- Orbital text bubbles -->
+  <div class="idle-bubble">Barbarian Nutrition</div>
+  <div class="idle-bubble">Physical Development</div>
+  <div class="idle-bubble">Maximum Sustainability</div>
+  <div class="idle-bubble">Combat Effectiveness</div>
+  <div class="idle-bubble">Lethality</div>
+  <div class="idle-bubble">Feeding the Horde</div>
+
+  <!-- Center hovering text -->
+  <div id="idle-center">
+    <div id="idle-tap">Tap Screen to Start Order</div>
+    <div id="idle-sub-wrap">
+      <span id="idle-phrase">NUTRIENCE</span>
+    </div>
+  </div>
+
+  <!-- Cartoon sword cursor -->
+  <div id="idle-cursor">
+    <svg width="40" height="64" viewBox="0 0 40 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- blade tip -->
+      <polygon points="20,1 25,16 15,16" fill="rgba(255,255,255,0.97)"/>
+      <!-- blade body (slight taper) -->
+      <polygon points="15,15 25,15 23,38 17,38" fill="rgba(255,255,255,0.93)"/>
+      <!-- blade fuller groove -->
+      <line x1="20" y1="8" x2="20" y2="36" stroke="rgba(160,220,255,0.45)" stroke-width="1.5"/>
+      <!-- cross-guard -->
+      <rect x="5" y="37" width="30" height="7" rx="3.5" fill="rgba(255,255,255,0.78)"/>
+      <!-- cross-guard gems -->
+      <circle cx="8"  cy="40" r="2.2" fill="rgba(140,200,255,0.7)"/>
+      <circle cx="32" cy="40" r="2.2" fill="rgba(140,200,255,0.7)"/>
+      <!-- grip -->
+      <rect x="17" y="44" width="6" height="14" rx="3" fill="rgba(255,255,255,0.62)"/>
+      <!-- grip wrap lines -->
+      <line x1="17" y1="49" x2="23" y2="49" stroke="rgba(80,140,200,0.5)" stroke-width="1.5"/>
+      <line x1="17" y1="53" x2="23" y2="53" stroke="rgba(80,140,200,0.5)" stroke-width="1.5"/>
+      <!-- pommel -->
+      <ellipse cx="20" cy="61" rx="6" ry="4" fill="rgba(255,255,255,0.82)"/>
+    </svg>
+  </div>
+</div>
+
+<!-- ══ START SCREEN ══ -->
+<div id="screen-start" class="screen active">
+  <!-- Hero content -->
+  <div class="hero-center">
+    <p class="hero-eyebrow">Bravo Company · First Regiment</p>
+    <h1 class="hero-title">Barbarian Store</h1>
+    <div class="hero-sub-wrap"><span class="hero-sub" id="hero-phrase">Made by Barbs</span></div>
+    <button class="hero-cta" onclick="goCheckout()">Start Order</button>
+    <span class="hero-hint">Tap once to begin</span>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="hero-bottom">
+    <div class="news-glass">
+      <div class="news-glass-label">What's New</div>
+      <div id="news-list">
+        <div class="news-glass-item">
+          <div class="news-glass-msg">Loading announcements…</div>
+        </div>
+      </div>
+    </div>
+    <button class="feedback-ghost" onclick="goSuggestion()">Suggestions &amp; Feedback →</button>
+  </div>
+</div>
+
+<!-- ══ CHECKOUT SCREEN ══ -->
+<div id="screen-checkout" class="screen">
+  <div class="inner">
+    <div class="checkout-left">
+      <div class="co-header">
+        <span class="section-title">Store</span>
+        <button class="btn-ghost" onclick="goStart()">Start</button>
+      </div>
+      <div id="category-bar" class="category-bar"></div>
+      <div id="item-grid" class="item-grid"></div>
+    </div>
+    <div class="cart-panel">
+      <div class="cart-head">
+        <span class="cart-title">Order</span>
+        <button class="btn-icon" onclick="toggleCancelMenu()" title="Options">✕</button>
+      </div>
+      <div id="cancel-menu" class="cancel-menu hidden">
+        <button class="btn-sm ghost" onclick="doClear()">Clear</button>
+        <button class="btn-danger btn-sm" onclick="goStart()">Start Over</button>
+        <button class="btn-sm ghost" onclick="hideCancelMenu()">‹</button>
+      </div>
+      <div id="cart-list" class="cart-list">
+        <div class="empty-cart">No items yet</div>
+      </div>
+      <div class="cart-foot">
+        <div id="cart-warn" class="warn-text"></div>
+        <div id="cart-total" class="cart-total">Total: $0.00</div>
+        <button class="btn-primary btn-checkout" onclick="goConfirm()">Review Order →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CONFIRM SCREEN ══ -->
+<div id="screen-confirm" class="screen">
+  <div class="inner">
+    <div class="confirm-panel">
+
+      <!-- Phase 1: order review -->
+      <div id="confirm-summary-phase">
+        <div class="confirm-hd">
+          <h2 class="confirm-title">Order Summary</h2>
+          <button class="btn-ghost" onclick="backToCart()">← Edit Cart</button>
+        </div>
+        <div id="confirm-rows" class="confirm-rows"></div>
+        <div class="confirm-total-row">
+          <span>Total</span>
+          <span id="confirm-total">$0.00</span>
+        </div>
+        <div id="confirm-warn" class="warn-text" style="margin-bottom:10px"></div>
+        <button class="btn-venmo" id="btn-venmo" onclick="doVenmoCheckout()">
+          Generate Venmo QR &amp; Checkout
+        </button>
+      </div>
+
+      <!-- Phase 2: QR code display -->
+      <div id="confirm-qr-phase">
+        <h2 class="confirm-title" style="margin-bottom:8px">Scan to Pay on Venmo</h2>
+        <p class="confirm-qr-hint">Open your phone camera or Venmo app and scan the code below</p>
+        <div class="qr-wrap">
+          <img id="qr-img" src="" width="210" height="210" alt="Venmo QR code">
+        </div>
+        <div class="confirm-amount-big" id="confirm-qr-amount">$0.00</div>
+        <button class="btn-done" onclick="afterQR()">✓ Done — Back to Start</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ SUGGESTION SCREEN ══ -->
+<div id="screen-suggestion" class="screen">
+  <div class="inner">
+    <div class="sug-header">
+      <h2>Suggestions &amp; Feedback</h2>
+      <button class="btn-ghost" onclick="goStart()">Back</button>
+    </div>
+    <div class="sug-body">
+      <p class="prompt">What should we stock, change, or improve?</p>
+      <textarea id="sug-text" class="sug-input"
+        placeholder="Type your feedback here…" readonly></textarea>
+      <div id="touch-kb" class="touch-kb"></div>
+      <div class="sug-foot">
+        <span id="sug-status" class="status"></span>
+        <button class="btn-primary"
+          style="font-size:17px;padding:12px 38px;border-radius:22px"
+          onclick="submitSuggestion()">Submit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const S = {
+  cart: {},        // { name: { price, quantity, stock } }
+  category: 'All',
+  inventory: [],
+  busy: false,     // transition lock
+};
+
+// ── API ────────────────────────────────────────────────────────────────────
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) { const e = await r.json(); throw new Error(e.error || r.statusText); }
+  return r.json();
+}
+
+// ── Shutter transition (Tactical Shutter — 10 strips, 60 Hz) ──────────────
+function shutter(dir, onSwap, onDone) {
+  if (S.busy) return;
+  S.busy = true;
+  const cv = document.getElementById('shutter');
+  const W = window.innerWidth, H = window.innerHeight;
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  cv.style.display = 'block';
+
+  const N = 10, SH = H / N, HALF = 12, TOTAL = 24, DARK = '#0D1B2A';
+  let step = 0, swapped = false;
+
+  function eoc(t) { t = Math.max(0, Math.min(1, t)); return 1 - Math.pow(1 - t, 3); }
+
+  function glowR(x1, y0, y1) {
+    ctx.fillStyle = '#163551'; ctx.fillRect(x1 - 10, y0, 10, y1 - y0);
+    ctx.fillStyle = '#2176AE'; ctx.fillRect(x1 - 5,  y0,  5, y1 - y0);
+    ctx.fillStyle = '#56B4F7'; ctx.fillRect(x1 - 2,  y0,  2, y1 - y0);
+    ctx.fillStyle = '#D0EFFF'; ctx.fillRect(x1 - 1,  y0,  1, y1 - y0);
+  }
+  function glowL(x0, y0, y1) {
+    ctx.fillStyle = '#163551'; ctx.fillRect(x0, y0, 10, y1 - y0);
+    ctx.fillStyle = '#2176AE'; ctx.fillRect(x0, y0,  5, y1 - y0);
+    ctx.fillStyle = '#56B4F7'; ctx.fillRect(x0, y0,  2, y1 - y0);
+    ctx.fillStyle = '#D0EFFF'; ctx.fillRect(x0, y0,  1, y1 - y0);
+  }
+
+  function frame() {
+    if (step >= TOTAL - 1) {
+      cv.style.display = 'none';
+      ctx.clearRect(0, 0, W, H);
+      S.busy = false;
+      if (onDone) onDone();
+      return;
+    }
+    ctx.clearRect(0, 0, W, H);
+
+    if (step >= HALF && !swapped) { onSwap(); swapped = true; }
+
+    for (let i = 0; i < N; i++) {
+      const y0 = i * SH, y1 = y0 + SH;
+      const fl = (i % 2 === 0) === (dir > 0);
+
+      if (step < HALF) {
+        // Cover: strips rush in with slight top-to-bottom cascade
+        const sc = (i / (N - 1)) * HALF * 0.15;
+        const t  = eoc((step - sc) / (HALF * 0.85));
+        const x  = fl ? -W + W * t : W * (1 - t);
+        ctx.fillStyle = DARK; ctx.fillRect(x, y0, W, SH);
+        fl ? glowR(x + W, y0, y1) : glowL(x, y0, y1);
+      } else {
+        // Reveal: strips cascade out top-first
+        const rv = step - HALF;
+        const sr = (i / (N - 1)) * HALF * 0.35;
+        const t  = eoc((rv - sr) / (HALF * 0.65));
+        const x  = fl ? W * t : -W * t;
+        if (t < 1) {
+          ctx.fillStyle = DARK; ctx.fillRect(x, y0, W, SH);
+          fl ? glowL(x, y0, y1) : glowR(x + W, y0, y1);
+        }
+      }
+    }
+    step++;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+function goTo(id, dir, onSwap) {
+  const cur = document.querySelector('.screen.active');
+  const tgt = document.getElementById(id);
+  if (!tgt || cur === tgt) return;
+  shutter(dir, () => {
+    cur.classList.remove('active');
+    tgt.classList.add('active');
+    if (onSwap) onSwap();
+  }, null);
+}
+
+async function goCheckout() {
+  if (S.busy) return;
+  disarmIdle();
+  const [inv, cats] = await Promise.all([api('/api/inventory'), api('/api/categories')]);
+  S.inventory = inv;
+  goTo('screen-checkout', 1, () => {
+    S.category = 'All';
+    renderCategories(cats);
+    renderItems();
+    hideCancelMenu();
+  });
+}
+
+async function goStart() {
+  if (S.busy) return;
+  const ann = await api('/api/announcements');
+  goTo('screen-start', -1, () => {
+    clearCart();
+    renderAnnouncements(ann);
+    armIdle();
+  });
+}
+
+function goSuggestion() {
+  if (S.busy) return;
+  disarmIdle();
+  goTo('screen-suggestion', 1, () => {
+    document.getElementById('sug-text').value = '';
+    setStatus('', '');
+    buildKeyboard();
+  });
+}
+
+// ── Start screen ───────────────────────────────────────────────────────────
+function renderAnnouncements(list) {
+  const el = document.getElementById('news-list');
+  const top2 = list.slice(0, 2);
+  el.innerHTML = top2.length
+    ? top2.map(a => `<div class="news-glass-item">
+        <div class="news-glass-date">${esc(a.date)}</div>
+        <div class="news-glass-msg">${esc(a.message)}</div>
+      </div>`).join('')
+    : '<div class="news-glass-item"><div class="news-glass-msg">No announcements yet.</div></div>';
+}
+
+// ── Item card helpers ──────────────────────────────────────────────────────
+function getItemEmoji(name, cat) {
+  const n = name.toLowerCase();
+  if (/monster|celsius|bang|reign|energy/.test(n))       return '⚡';
+  if (/water|aqua|h2o/.test(n))                          return '💧';
+  if (/coffee|espresso|latte/.test(n))                   return '☕';
+  if (/tea|matcha/.test(n))                              return '🍵';
+  if (/juice|lemonade|smoothie/.test(n))                 return '🧃';
+  if (/soda|cola|pepsi|coke|sprite|dr pepper/.test(n))   return '🥤';
+  if (/ramen|noodle|pasta|pho|udon/.test(n))             return '🍜';
+  if (/pizza/.test(n))                                   return '🍕';
+  if (/burger|sandwich|sub|wrap/.test(n))                return '🥪';
+  if (/hot dog|corn dog/.test(n))                        return '🌭';
+  if (/chicken|wing/.test(n))                            return '🍗';
+  if (/ben.{0,4}jerry|pint|sundae/.test(n))             return '🍨';
+  if (/ice cream|popsicle|gelato/.test(n))               return '🍦';
+  if (/chocolate|nutella|hershey|kitkat|reese/.test(n))  return '🍫';
+  if (/gummy|haribo|bear/.test(n))                       return '🐻';
+  if (/skittles|starburst|jolly/.test(n))                return '🍬';
+  if (/m&m|mm|twix|snickers|mars/.test(n))               return '🍬';
+  if (/chip|doritos|takis|cheeto|frito|nacho/.test(n))   return '🌽';
+  if (/popcorn/.test(n))                                 return '🍿';
+  if (/pretzel|cracker/.test(n))                         return '🥨';
+  if (/quest|cliff|protein|bar|granola/.test(n))         return '💪';
+  if (/trail|nut|almond|cashew/.test(n))                 return '🥜';
+  if (/cookie|brownie/.test(n))                          return '🍪';
+  if (/fruit|apple|banana|orange/.test(n))               return '🍎';
+  // Category fallbacks
+  const cm = {Drinks:'🥤','Shelf Snacks':'🍿',Microwave:'🍜',
+               Frozen:'🍦',Candy:'🍬',Other:'🛒'};
+  return cm[cat] || '🛒';
+}
+
+function getCategoryGradient(cat) {
+  const map = {
+    'Drinks':       'linear-gradient(145deg,#1E90FF,#0051D5)',
+    'Shelf Snacks': 'linear-gradient(145deg,#FF9F0A,#FF6000)',
+    'Microwave':    'linear-gradient(145deg,#FF453A,#A62019)',
+    'Frozen':       'linear-gradient(145deg,#64D2FF,#1E90FF)',
+    'Candy':        'linear-gradient(145deg,#FF375F,#BF5AF2)',
+    'Other':        'linear-gradient(145deg,#8E8E93,#3A3A3C)',
+  };
+  return map[cat] || 'linear-gradient(145deg,#636366,#3A3A3C)';
+}
+
+// ── Checkout ───────────────────────────────────────────────────────────────
+function renderCategories(cats) {
+  const bar = document.getElementById('category-bar');
+  // Indicator div first — pills render on top via z-index
+  bar.innerHTML = `<div id="cat-indicator"></div>` +
+    ['All', ...cats].map(c =>
+      `<button class="pill${c === S.category ? ' active' : ''}"
+         onclick="setCategory('${esc(c)}')">${esc(c)}</button>`
+    ).join('');
+  // Position indicator after paint so offsetLeft/Width are ready
+  requestAnimationFrame(moveCatIndicator);
+}
+
+function moveCatIndicator() {
+  const bar  = document.getElementById('category-bar');
+  const pill = bar && bar.querySelector('.pill.active');
+  const ind  = document.getElementById('cat-indicator');
+  if (!pill || !ind) return;
+  ind.style.left  = pill.offsetLeft  + 'px';
+  ind.style.width = pill.offsetWidth + 'px';
+}
+
+function setCategory(cat) {
+  S.category = cat;
+  document.querySelectorAll('#category-bar .pill').forEach(p =>
+    p.classList.toggle('active', p.textContent.trim() === cat));
+  moveCatIndicator();
+  // Scroll the active pill into view if the bar is overflowing
+  const active = document.querySelector('#category-bar .pill.active');
+  if (active) active.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'nearest' });
+  renderItems();
+}
+
+function renderItems() {
+  const grid  = document.getElementById('item-grid');
+  const items = S.category === 'All'
+    ? S.inventory
+    : S.inventory.filter(i => i.category === S.category);
+
+  if (!items.length) {
+    grid.innerHTML = '<p class="no-items">No items in this category.</p>';
+    return;
+  }
+
+  grid.innerHTML = items.map(i => {
+    const inCart  = S.cart[i.name] ? S.cart[i.name].quantity : 0;
+    const noStock = i.stock === 0;
+    const isLow   = i.stock > 0 && i.stock <= 3;
+    const emoji   = getItemEmoji(i.name, i.category);
+    const grad    = getCategoryGradient(i.category);
+
+    const overlayHTML = noStock
+      ? `<div class="sold-out-overlay"><div class="sold-out-stamp">SOLD OUT</div></div>`
+      : inCart > 0
+        ? `<div class="card-overlay"><div class="cart-qty-bubble">${inCart}</div></div>`
+        : '';
+    const lowBandHTML = isLow
+      ? `<div class="low-band">⚠ ONLY ${i.stock} LEFT</div>`
+      : '';
+    const stockTxt = noStock ? 'Sold out'
+                   : isLow  ? `${i.stock} left`
+                   :          `${i.stock} in stock`;
+    const addBtnHTML = noStock
+      ? ''
+      : `<button class="add-btn" onclick="event.stopPropagation();addToCart(${i.id})">+</button>`;
+
+    return `<div class="item-card${inCart > 0 ? ' in-cart' : ''}${noStock ? ' no-stock' : ''}"
+               onclick="${noStock ? '' : `addToCart(${i.id})`}">
+      <div class="card-visual" style="background:${grad}">
+        <span class="card-emoji">${emoji}</span>
+        ${overlayHTML}
+        ${lowBandHTML}
+      </div>
+      <div class="card-body-inner">
+        <div class="item-name">${esc(i.name)}</div>
+        <div class="item-price">$${i.price.toFixed(2)}</div>
+        <div class="card-footer-row">
+          <span class="item-stock">${esc(stockTxt)}</span>
+          ${addBtnHTML}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Cart ───────────────────────────────────────────────────────────────────
+function addToCart(id) {
+  const item = S.inventory.find(i => i.id === id);
+  if (!item) return;
+  const cur = S.cart[item.name];
+  const qty = cur ? cur.quantity : 0;
+  if (qty >= item.stock) {
+    setWarn(`Only ${item.stock} ${item.name} in stock.`);
+    return;
+  }
+  S.cart[item.name] = { price: item.price, quantity: qty + 1, stock: item.stock };
+  clearWarn();
+  renderCart();
+  renderItems();  // refresh card overlays / qty bubbles
+}
+
+function clearCart() { S.cart = {}; clearWarn(); renderCart(); renderItems(); }
+function doClear()   { clearCart(); hideCancelMenu(); }
+
+function removeFromCart(name) {
+  if (!S.cart[name]) return;
+  const newQty = S.cart[name].quantity - 1;
+  if (newQty <= 0) {
+    delete S.cart[name];
+  } else {
+    S.cart[name] = { ...S.cart[name], quantity: newQty };
+  }
+  clearWarn();
+  renderCart();
+  renderItems(); // update card overlay / qty bubble
+}
+
+function renderCart() {
+  const el = document.getElementById('cart-list');
+  const keys = Object.keys(S.cart);
+  if (!keys.length) {
+    el.innerHTML = '<div class="empty-cart">No items yet</div>';
+    document.getElementById('cart-total').textContent = 'Total: $0.00';
+    return;
+  }
+  let total = 0;
+  el.innerHTML = keys.map(name => {
+    const { price, quantity } = S.cart[name];
+    const lt = price * quantity; total += lt;
+    const label = name.length > 18 ? name.slice(0, 15) + '…' : name;
+    return `<div class="cart-item">
+      <button class="qty-minus" data-name="${esc(name)}" onclick="removeFromCart(this.dataset.name)">−</button>
+      <div class="qty-badge">${quantity}</div>
+      <div class="ci-name">${esc(label)}</div>
+      <div class="ci-total">$${lt.toFixed(2)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('cart-total').textContent = `Total: $${total.toFixed(2)}`;
+}
+
+function setWarn(m)  { document.getElementById('cart-warn').textContent = m; }
+function clearWarn() { document.getElementById('cart-warn').textContent = ''; }
+
+function toggleCancelMenu() {
+  document.getElementById('cancel-menu').classList.toggle('hidden');
+}
+function hideCancelMenu() {
+  document.getElementById('cancel-menu').classList.add('hidden');
+}
+
+async function processCheckout() {
+  if (!Object.keys(S.cart).length) return;
+  const total = Object.values(S.cart).reduce((s, i) => s + i.price * i.quantity, 0);
+  try {
+    await api('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cart: S.cart, total })
+    });
+    S.busy = false; // clear any stuck transition lock so goStart() isn't silently blocked
+    goStart();
+  } catch (e) {
+    setWarn(e.message || 'Checkout failed. Try again.');
+  }
+}
+
+// ── Confirm / Venmo QR screen ─────────────────────────────────────────────
+function goConfirm() {
+  if (S.busy) return;
+  if (!Object.keys(S.cart).length) return;
+  disarmIdle();
+  goTo('screen-confirm', 1, () => {
+    // Reset to summary phase
+    document.getElementById('confirm-summary-phase').style.display = '';
+    document.getElementById('confirm-qr-phase').style.display = 'none';
+    document.getElementById('confirm-warn').textContent = '';
+    const btn = document.getElementById('btn-venmo');
+    btn.disabled = false;
+    btn.textContent = 'Generate Venmo QR & Checkout';
+    renderConfirm();
+  });
+}
+
+function backToCart() {
+  S.busy = false;
+  goTo('screen-checkout', -1, () => {
+    renderCart();
+    renderItems();
+    hideCancelMenu();
+  });
+}
+
+function renderConfirm() {
+  const keys = Object.keys(S.cart);
+  let total = 0;
+  document.getElementById('confirm-rows').innerHTML = keys.map(name => {
+    const { price, quantity } = S.cart[name];
+    const lt = price * quantity; total += lt;
+    return `<div class="confirm-row">
+      <div class="confirm-row-qty">${quantity}&times;</div>
+      <div class="confirm-row-name">${esc(name)}</div>
+      <div class="confirm-row-price">$${lt.toFixed(2)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('confirm-total').textContent = `$${total.toFixed(2)}`;
+}
+
+async function doVenmoCheckout() {
+  if (!Object.keys(S.cart).length) return;
+  const total = Object.values(S.cart).reduce((s, i) => s + i.price * i.quantity, 0);
+  const btn = document.getElementById('btn-venmo');
+  btn.disabled = true;
+  btn.textContent = 'Processing…';
+  document.getElementById('confirm-warn').textContent = '';
+  try {
+    // Log transaction
+    await api('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cart: S.cart, total })
+    });
+    // Build item list for Venmo note e.g. "2x Quest Bar, 1x White Monster"
+    const note = Object.entries(S.cart)
+      .map(([name, { quantity }]) => `${quantity}x ${name}`)
+      .join(', ');
+    // Fetch server-generated QR code (uses VENMO_USERNAME env var)
+    const qrData = await api(
+      `/api/venmo_qr?amount=${total.toFixed(2)}&note=${encodeURIComponent(note)}`
+    );
+    // Show QR phase
+    document.getElementById('qr-img').src = qrData.qr;
+    document.getElementById('confirm-qr-amount').textContent = `$${total.toFixed(2)}`;
+    document.getElementById('confirm-summary-phase').style.display = 'none';
+    const qrPhase = document.getElementById('confirm-qr-phase');
+    qrPhase.style.display = 'flex';
+    clearCart();
+    startQRPhase();
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Generate Venmo QR & Checkout';
+    document.getElementById('confirm-warn').textContent = e.message || 'Checkout failed. Try again.';
+  }
+}
+
+function afterQR() {
+  disarmQRIdle();
+  S.busy = false;
+  goStart();
+}
+
+function startQRPhase() {
+  const btn = document.querySelector('#confirm-qr-phase .btn-done');
+
+  // Grey out with 5-second countdown, then unlock green
+  btn.disabled = true;
+  let secs = 5;
+  btn.textContent = `Back to Start (${secs})`;
+  _qrCountdown = setInterval(() => {
+    secs--;
+    if (secs > 0) {
+      btn.textContent = `Back to Start (${secs})`;
+    } else {
+      clearInterval(_qrCountdown); _qrCountdown = null;
+      btn.disabled = false;
+      btn.textContent = '✓ Done — Back to Start';
+    }
+  }, 1000);
+
+  // Start 1-minute inactivity auto-return
+  armQRIdle();
+}
+
+function armQRIdle() {
+  clearTimeout(_qrIdleTimer);
+  _qrIdleTimer = setTimeout(() => { afterQR(); }, QR_IDLE_MS);
+}
+
+function disarmQRIdle() {
+  clearTimeout(_qrIdleTimer); _qrIdleTimer = null;
+  if (_qrCountdown) { clearInterval(_qrCountdown); _qrCountdown = null; }
+}
+
+// ── Suggestion keyboard ────────────────────────────────────────────────────
+let kbShift = false;
+
+function buildKeyboard() {
+  const rows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm,.?'];
+  const kb = document.getElementById('touch-kb');
+  kb.innerHTML = '';
+  rows.forEach(row => {
+    const r = document.createElement('div');
+    r.className = 'key-row';
+    [...row].forEach(ch => {
+      const k = document.createElement('button');
+      k.className = 'key';
+      k.textContent = kbShift ? ch.toUpperCase() : ch;
+      k.onclick = () => pressKey(ch);
+      r.appendChild(k);
+    });
+    kb.appendChild(r);
+  });
+  const cr = document.createElement('div');
+  cr.className = 'key-row';
+  const mk = (txt, cls, fn) => {
+    const k = document.createElement('button');
+    k.className = cls; k.textContent = txt; k.onclick = fn;
+    return k;
+  };
+  cr.appendChild(mk('Shift', 'key key-wide' + (kbShift ? ' key-shift-on' : ''),
+    () => { kbShift = !kbShift; buildKeyboard(); }));
+  cr.appendChild(mk('Space', 'key key-space', () => pressKey(' ')));
+  cr.appendChild(mk('Enter', 'key key-wide',  () => pressKey('\n')));
+  cr.appendChild(mk('⌫',    'key key-wide',  pressBack));
+  kb.appendChild(cr);
+}
+
+function pressKey(ch) {
+  const ta = document.getElementById('sug-text');
+  if (kbShift && ch.match(/^[a-z]$/)) { ch = ch.toUpperCase(); kbShift = false; buildKeyboard(); }
+  ta.value += ch;
+}
+function pressBack() {
+  const ta = document.getElementById('sug-text');
+  ta.value = ta.value.slice(0, -1);
+}
+
+async function submitSuggestion() {
+  const msg = document.getElementById('sug-text').value.trim();
+  if (!msg) { setStatus('Please type something first.', 'err'); return; }
+  try {
+    await api('/api/suggestion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg })
+    });
+    setStatus('Submitted. Thank you!', 'ok');
+    setTimeout(goStart, 1200);
+  } catch (e) {
+    setStatus(e.message || 'Error submitting.', 'err');
+  }
+}
+
+function setStatus(txt, cls) {
+  const el = document.getElementById('sug-status');
+  el.textContent = txt;
+  el.className = 'status ' + cls;
+}
+
+// ── Utility ────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Subtitle phrase cycling ────────────────────────────────────────────────
+function initSubCycle() {
+  const phrases = ['Made by Barbs', 'For Barbs', 'Fuel the Horde'];
+  const el = document.getElementById('hero-phrase');
+  if (!el) return;
+  let idx = 1; // 0 already shown in HTML
+
+  setInterval(() => {
+    // Slide current phrase out upward
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(-14px)';
+
+    setTimeout(() => {
+      // Instantly reposition below (no transition)
+      el.style.transition = 'none';
+      el.style.transform = 'translateY(14px)';
+      el.textContent = phrases[idx % phrases.length];
+      idx++;
+
+      // Force reflow so the browser registers the "from" state
+      void el.offsetWidth;
+
+      // Re-enable transition and slide in
+      el.style.transition = '';
+      el.style.opacity = '1';
+      el.style.transform = 'translateY(0)';
+    }, 340);
+  }, 2800);
+}
+
+// ── Shader canvas animation ────────────────────────────────────────────────
+function initShader() {
+  const cv = document.getElementById('shader-bg');
+  if (!cv) return;
+
+  function resize() { cv.width = window.innerWidth; cv.height = window.innerHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const ctx = cv.getContext('2d');
+
+  // Each orb: phase offsets, angular speeds, size factor, hue, opacity
+  const orbs = [
+    { px:0.00, py:0.00, sx:0.47, sy:0.31, rf:0.72, h:218, a:0.95 }, // royal blue
+    { px:1.20, py:0.80, sx:0.31, sy:0.53, rf:0.65, h:255, a:0.85 }, // violet
+    { px:2.40, py:1.60, sx:0.59, sy:0.41, rf:0.58, h:195, a:0.75 }, // cyan
+    { px:3.60, py:2.40, sx:0.23, sy:0.67, rf:0.50, h:235, a:0.65 }, // indigo
+    { px:0.80, py:3.20, sx:0.71, sy:0.29, rf:0.44, h:180, a:0.55 }, // teal accent
+  ];
+
+  let t = 0;
+  function frame() {
+    const W = cv.width, H = cv.height, D = Math.min(W, H);
+
+    // Deep dark base
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#04060F';
+    ctx.fillRect(0, 0, W, H);
+
+    // Additive blending makes orbs glow into each other
+    ctx.globalCompositeOperation = 'screen';
+
+    orbs.forEach(o => {
+      const x = W * (0.5 + 0.42 * Math.sin(t * o.sx * 0.005 + o.px));
+      const y = H * (0.5 + 0.42 * Math.cos(t * o.sy * 0.005 + o.py));
+      const r = D * o.rf;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0,   `hsla(${o.h},85%,52%,${o.a})`);
+      g.addColorStop(0.45,`hsla(${o.h},80%,38%,${o.a * 0.35})`);
+      g.addColorStop(1,   `hsla(${o.h},75%,25%,0)`);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = g;
+      ctx.fill();
+    });
+
+    ctx.globalCompositeOperation = 'source-over';
+    t++;
+    requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+// ── Idle / Screensaver System ─────────────────────────────────────────────
+let _idleTimer       = null;
+let _idleRaf         = null;
+let _idleSubInterval = null;
+const IDLE_MS        = 30_000; // 30 seconds
+
+let _qrIdleTimer = null;
+let _qrCountdown = null;
+const QR_IDLE_MS = 60_000; // 1 minute inactivity on QR screen → auto-return
+
+function armIdle() {
+  clearTimeout(_idleTimer);
+  _idleTimer = setTimeout(showIdle, IDLE_MS);
+}
+
+function disarmIdle() {
+  clearTimeout(_idleTimer);
+  _idleTimer = null;
+}
+
+function showIdle() {
+  // Only trigger from the start screen — never interrupt checkout, confirm, or suggestion
+  if (!document.getElementById('screen-start').classList.contains('active')) return;
+  // Reset phrase to first item before showing
+  const ph = document.getElementById('idle-phrase');
+  if (ph) { ph.textContent = 'NUTRIENCE'; ph.style.opacity='1'; ph.style.transform='translateY(0)'; ph.style.transition=''; }
+  document.getElementById('screen-idle').classList.add('visible');
+  _startIdleCanvas();
+  _idleSubInterval = _startIdleSubCycle();
+}
+
+function hideIdle() {
+  document.getElementById('screen-idle').classList.remove('visible');
+  _stopIdleCanvas();
+  if (_idleSubInterval) { clearInterval(_idleSubInterval); _idleSubInterval = null; }
+}
+
+function _startIdleSubCycle() {
+  const phrases = ['NUTRIENCE','FITNESS','SUSTAINABILITY','INNOVATION','BARBARIAN FRAMEWORK','LIMITLESS'];
+  const el = document.getElementById('idle-phrase');
+  if (!el) return null;
+  let idx = 1;
+  return setInterval(() => {
+    el.style.opacity   = '0';
+    el.style.transform = 'translateY(-13px)';
+    setTimeout(() => {
+      el.style.transition = 'none';
+      el.style.transform  = 'translateY(13px)';
+      el.textContent = phrases[idx % phrases.length];
+      idx++;
+      void el.offsetWidth;
+      el.style.transition = '';
+      el.style.opacity    = '1';
+      el.style.transform  = 'translateY(0)';
+    }, 330);
+  }, 2600);
+}
+
+function onIdleTouch() {
+  hideIdle();
+  armIdle(); // re-arm for next inactivity period
+}
+
+function _startIdleCanvas() {
+  const cv = document.getElementById('idle-canvas');
+  if (!cv) return;
+  const W = cv.width  = window.innerWidth;
+  const H = cv.height = window.innerHeight;
+  const ctx = cv.getContext('2d');
+  const cx = W / 2, cy = H / 2;
+
+  // ── Orbs (slow, ambient, revolving hue) ──────────────────────────────────
+  const orbs = [
+    { px:0.00, py:0.00, sx:0.11, sy:0.08, rf:0.92, baseH:218, a:0.90 },
+    { px:2.20, py:1.50, sx:0.07, sy:0.14, rf:0.84, baseH:275, a:0.80 },
+    { px:1.40, py:2.90, sx:0.17, sy:0.10, rf:0.76, baseH:182, a:0.72 },
+    { px:3.60, py:0.80, sx:0.05, sy:0.19, rf:0.68, baseH:315, a:0.62 },
+    { px:0.70, py:3.80, sx:0.13, sy:0.07, rf:0.60, baseH:145, a:0.52 },
+  ];
+
+  // ── Ring layout ───────────────────────────────────────────────────────────
+  const N = 6;
+  const R = Math.min(W * 0.34, H * 0.40, 285);
+
+  // Position SVG orbit ring
+  const ringCircle = document.getElementById('idle-ring-circle');
+  if (ringCircle) {
+    ringCircle.setAttribute('cx', cx);
+    ringCircle.setAttribute('cy', cy);
+    ringCircle.setAttribute('r',  R);
+  }
+
+  // Hide sword cursor — not used
+  const cursorEl = document.getElementById('idle-cursor');
+  if (cursorEl) cursorEl.style.display = 'none';
+
+  const bubbleEls = Array.from(document.querySelectorAll('.idle-bubble'));
+  const centerEl  = document.getElementById('idle-center');
+
+  // ── Place bubbles at given angle array ────────────────────────────────────
+  // animate=true adds a staggered CSS transition so they glide to new spots
+  function placeBubbles(angles, animate) {
+    bubbleEls.forEach((el, i) => {
+      const delay = animate ? (i * 60) + 'ms' : '0ms';
+      el.style.transition = animate
+        ? `left .95s cubic-bezier(.22,1,.36,1) ${delay}, top .95s cubic-bezier(.22,1,.36,1) ${delay},
+           background .45s, border-color .45s, box-shadow .45s, color .45s, transform .45s`
+        : 'background .45s, border-color .45s, box-shadow .45s, color .45s, transform .45s';
+      el.style.left = (cx + R * Math.cos(angles[i])) + 'px';
+      el.style.top  = (cy + R * Math.sin(angles[i])) + 'px';
+    });
+  }
+
+  // ── Chaotic angle generator ───────────────────────────────────────────────
+  // Fisher-Yates shuffle of the 6 evenly-spaced slots, then add ±25% jitter
+  // per slot so the ring never looks perfectly uniform after a scramble.
+  function newAngles() {
+    const slots = Array.from({length:N}, (_, i) => -Math.PI/2 + i * (2*Math.PI/N));
+    for (let i = N-1; i > 0; i--) {
+      const j = Math.random() * (i+1) | 0;
+      [slots[i], slots[j]] = [slots[j], slots[i]];
+    }
+    const maxJitter = (2*Math.PI / N) * 0.25; // ±25% of one slot = ~15°
+    return slots.map(a => a + (Math.random()*2 - 1) * maxJitter);
+  }
+
+  // Start at even spacing
+  placeBubbles(Array.from({length:N}, (_, i) => -Math.PI/2 + i*(2*Math.PI/N)), false);
+  bubbleEls.forEach(el => el.classList.remove('active'));
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let curBubble = 0;
+  let rFrame    = 0;
+  let pauseLen  = 75 + (Math.random()*55|0); // first bubble duration (frames)
+
+  let t = 0;
+  function frame() {
+    if (!document.getElementById('screen-idle').classList.contains('visible')) return;
+
+    const D = Math.min(W, H);
+    const hShift = t * 0.035;
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#04060F';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'screen';
+    orbs.forEach(o => {
+      const x = W * (0.5 + 0.48 * Math.sin(t * o.sx * 0.003 + o.px));
+      const y = H * (0.5 + 0.48 * Math.cos(t * o.sy * 0.003 + o.py));
+      const r = D * o.rf;
+      const h = (o.baseH + hShift) % 360;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0,    `hsla(${h},90%,55%,${o.a})`);
+      g.addColorStop(0.42, `hsla(${h},80%,36%,${o.a * 0.28})`);
+      g.addColorStop(1,    `hsla(${h},75%,22%,0)`);
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+      ctx.fillStyle = g; ctx.fill();
+    });
+    ctx.globalCompositeOperation = 'source-over';
+
+    // ── Highlight active bubble ──
+    bubbleEls.forEach((el, i) => el.classList.toggle('active', i === curBubble));
+
+    if (++rFrame >= pauseLen) {
+      rFrame   = 0;
+      curBubble = (curBubble + 1) % N;
+      pauseLen  = 75 + (Math.random()*55|0); // re-randomise dwell time
+
+      // After one full lap (back to bubble 0), scramble all pill positions
+      if (curBubble === 0) {
+        placeBubbles(newAngles(), true);
+      }
+    }
+
+    // ── Center text gentle figure-8 drift ──
+    if (centerEl) {
+      centerEl.style.left = (cx + 32 * Math.sin(t * 0.0028)) + 'px';
+      centerEl.style.top  = (cy + 16 * Math.cos(t * 0.0041)) + 'px';
+    }
+
+    t++;
+    _idleRaf = requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+function _stopIdleCanvas() {
+  if (_idleRaf) { cancelAnimationFrame(_idleRaf); _idleRaf = null; }
+}
+
+function initIdleSystem() {
+  const onActivity = () => {
+    // If idle screen is up, any touch dismisses it
+    if (document.getElementById('screen-idle').classList.contains('visible')) {
+      onIdleTouch();
+      return;
+    }
+    // Re-arm timer only when sitting on the start screen
+    if (document.getElementById('screen-start').classList.contains('active')) {
+      armIdle();
+      return;
+    }
+    // Reset QR-screen inactivity timer on any touch while reviewing the QR code
+    if (_qrIdleTimer && document.getElementById('screen-confirm').classList.contains('active')) {
+      armQRIdle();
+    }
+  };
+  document.addEventListener('touchstart', onActivity, { passive: true });
+  document.addEventListener('click',      onActivity);
+  // Arm immediately on load
+  armIdle();
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+(async () => {
+  initShader();
+  initSubCycle();
+  initIdleSystem();
+  try {
+    const ann = await api('/api/announcements');
+    renderAnnouncements(ann);
+  } catch (_) {
+    document.getElementById('news-list').innerHTML =
+      '<div class="news-glass-item"><div class="news-glass-msg">Could not load announcements.</div></div>';
+  }
+})();
+</script>
+</body>
+</html>

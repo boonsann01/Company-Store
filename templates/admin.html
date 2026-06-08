@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Store Admin</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { background: #f0f2f5; font-size: 0.9rem; }
+  .navbar-brand { font-weight: 800; letter-spacing: -.3px; }
+
+  /* Nav tabs in navbar */
+  .top-nav .nav-link { color: rgba(255,255,255,.65); font-weight: 600; border-radius: 8px;
+                        padding: 6px 16px; transition: all .15s; }
+  .top-nav .nav-link:hover { color: #fff; background: rgba(255,255,255,.1); }
+  .top-nav .nav-link.active { color: #fff; background: rgba(255,255,255,.18); }
+
+  /* KPI cards */
+  .kpi-card { border: none; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.07); }
+  .kpi-label { font-size: .7rem; font-weight: 700; text-transform: uppercase;
+               letter-spacing: .06em; color: #6c757d; margin-bottom: 4px; }
+  .kpi-value { font-size: 1.7rem; font-weight: 800; line-height: 1; }
+
+  /* Bar charts */
+  .bar-label { font-size: .8rem; }
+  .bar-track { height: 7px; border-radius: 4px; background: #e9ecef; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 4px; transition: width .4s ease; }
+
+  /* Mini daily chart */
+  .day-bar-wrap { display: flex; align-items: flex-end; gap: 6px; height: 90px; }
+  .day-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .day-bar { width: 100%; border-radius: 4px 4px 0 0; background: #0d6efd;
+             min-height: 3px; transition: height .4s ease; }
+  .day-lbl { font-size: .68rem; color: #6c757d; white-space: nowrap; }
+  .day-amt  { font-size: .68rem; color: #0d6efd; font-weight: 700; }
+
+  /* Tables */
+  .table-card { border: none; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.07); overflow: hidden; }
+  .table-scroll { max-height: 380px; overflow-y: auto; }
+  thead.sticky th { position: sticky; top: 0; background: #fff; z-index: 1; }
+
+  /* Stock bar */
+  .stock-bar { height: 8px; border-radius: 4px; background: #e9ecef; overflow: hidden; min-width: 80px; }
+
+  /* Suggestion rows */
+  .sug-msg { white-space: pre-wrap; font-size: .85rem; color: #343a40; }
+
+  /* Section headers */
+  .section-hdr { font-weight: 800; font-size: 1rem; margin-bottom: 0; }
+
+  /* Alert position */
+  .alert-float { position: sticky; top: 56px; z-index: 900; }
+</style>
+</head>
+<body>
+
+<!-- ══ NAVBAR ══════════════════════════════════════════════════════════════ -->
+<nav class="navbar navbar-dark bg-dark sticky-top" style="height:56px">
+  <div class="container-fluid px-4 d-flex align-items-center gap-4">
+    <span class="navbar-brand mb-0">🏪 Company Store</span>
+
+    <ul class="nav top-nav me-auto" id="adminTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-btn-inventory" type="button"
+          data-bs-toggle="tab" data-bs-target="#tab-inventory" role="tab">
+          📦 Inventory
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-btn-suggestions" type="button"
+          data-bs-toggle="tab" data-bs-target="#tab-suggestions" role="tab">
+          💬 Suggestions
+          {% if suggestions %}
+          <span class="badge bg-primary ms-1">{{ suggestions|length }}</span>
+          {% endif %}
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-btn-analytics" type="button"
+          data-bs-toggle="tab" data-bs-target="#tab-analytics" role="tab">
+          📊 Analytics
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-btn-sales" type="button"
+          data-bs-toggle="tab" data-bs-target="#tab-sales" role="tab">
+          📈 Sales
+        </button>
+      </li>
+    </ul>
+
+    <!-- Live indicator -->
+    <span id="live-dot" title="Live data updates active"
+      style="display:inline-flex;align-items:center;gap:5px;font-size:.72rem;
+             color:rgba(255,255,255,.55);white-space:nowrap;">
+      <span id="live-pulse"
+        style="width:8px;height:8px;border-radius:50%;background:#28a745;
+               display:inline-block;transition:background .3s;"></span>
+      <span id="live-status">LIVE</span>
+    </span>
+
+    <a href="/logout" class="btn btn-outline-light btn-sm fw-bold">Log Out</a>
+  </div>
+</nav>
+
+<!-- Toast container (sale notifications) -->
+<div id="toast-container"
+  class="position-fixed top-0 end-0 p-3"
+  style="z-index:1200;margin-top:60px"></div>
+
+<!-- Alert Banner -->
+{% if admin_alert %}
+<div class="alert-float px-4 pt-2">
+  <div class="alert alert-{{ admin_alert.style }} alert-dismissible fade show mb-0 shadow-sm" role="alert">
+    {{ admin_alert.message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══ TAB CONTENT ══════════════════════════════════════════════════════════ -->
+<div class="tab-content">
+
+  <!-- ━━ TAB 1: INVENTORY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="tab-pane fade" id="tab-inventory" role="tabpanel">
+    <div class="container-fluid px-4 py-4">
+      <div class="row g-4">
+
+        <!-- Left: Management Forms -->
+        <div class="col-lg-4">
+
+          <!-- Update / Add Item -->
+          <div class="card table-card mb-4">
+            <div class="card-header bg-dark text-white pb-0 border-0">
+              <ul class="nav nav-tabs border-0" id="itemTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link active text-dark bg-white fw-semibold"
+                    data-bs-toggle="tab" data-bs-target="#pane-update" type="button"
+                    id="item-tab-update" role="tab">Update / Delete</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link text-white fw-semibold"
+                    data-bs-toggle="tab" data-bs-target="#pane-add" type="button"
+                    id="item-tab-add" role="tab">Add New</button>
+                </li>
+              </ul>
+            </div>
+            <div class="card-body">
+              <div class="tab-content" id="itemTabContent">
+
+                <!-- Update/Delete -->
+                <div class="tab-pane fade show active" id="pane-update" role="tabpanel">
+                  <form method="POST">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Item Name</label>
+                      <input list="inv-list" name="name" id="update-name" class="form-control"
+                        placeholder="Start typing…" required autocomplete="off">
+                      <datalist id="inv-list">
+                        {% for item in inventory %}
+                          <option value="{{ item[1] }}">
+                        {% endfor %}
+                      </datalist>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Category</label>
+                      <select name="category" id="update-category" class="form-select" required>
+                        {% for cat in categories %}
+                          <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="row g-2 mb-3">
+                      <div class="col">
+                        <label class="form-label fw-semibold">Price ($)</label>
+                        <input type="number" step="0.01" min="0" name="price"
+                          id="update-price" class="form-control" required>
+                      </div>
+                      <div class="col">
+                        <label class="form-label fw-semibold">Stock</label>
+                        <input type="number" min="0" name="stock"
+                          id="update-stock" class="form-control" required>
+                      </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                      <button formaction="/update" type="submit"
+                        class="btn btn-primary w-100 fw-bold">Save</button>
+                      <button formaction="/delete" type="submit"
+                        class="btn btn-outline-danger w-100 fw-bold"
+                        onclick="return confirm('Delete this item permanently?')">Delete</button>
+                    </div>
+                  </form>
+                </div>
+
+                <!-- Add New -->
+                <div class="tab-pane fade" id="pane-add" role="tabpanel">
+                  <form action="/add" method="POST">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Item Name</label>
+                      <input type="text" name="name" class="form-control"
+                        placeholder="e.g. Takis" required>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Category</label>
+                      <select name="category" class="form-select" required>
+                        {% for cat in categories %}
+                          <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="row g-2 mb-3">
+                      <div class="col">
+                        <label class="form-label fw-semibold">Price ($)</label>
+                        <input type="number" step="0.01" min="0" name="price"
+                          class="form-control" required>
+                      </div>
+                      <div class="col">
+                        <label class="form-label fw-semibold">Stock</label>
+                        <input type="number" min="0" name="stock"
+                          class="form-control" required>
+                      </div>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100 fw-bold">
+                      Add to Inventory
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Add Category -->
+          <div class="card table-card mb-4">
+            <div class="card-header bg-secondary text-white fw-bold">Create Category</div>
+            <div class="card-body">
+              <form action="/add_category" method="POST" class="d-flex gap-2">
+                <input type="text" name="new_category" class="form-control"
+                  placeholder="e.g. Toiletries, Apparel…" required>
+                <button type="submit" class="btn btn-secondary fw-bold text-nowrap">Add</button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Post Announcement -->
+          <div class="card table-card mb-4">
+            <div class="card-header bg-info text-white fw-bold">Post Announcement</div>
+            <div class="card-body">
+              <form action="/post_news" method="POST">
+                <div class="mb-3">
+                  <textarea name="message" class="form-control" rows="3"
+                    placeholder="Announcement text…" required></textarea>
+                  <div class="form-text text-muted">Date &amp; time are logged automatically.</div>
+                </div>
+                <button type="submit" class="btn btn-info text-white w-100 fw-bold">
+                  Push to Kiosk
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Venmo Settings -->
+          <div class="card table-card mb-4">
+            <div class="card-header fw-bold text-white" style="background:#3D95CE;">
+              💸 Venmo Checkout Settings
+            </div>
+            <div class="card-body">
+              <p class="small text-muted mb-3">
+                The checkout QR code sends payment to this Venmo handle.
+                Update it whenever the store Venmo rotates (~every 6 months).
+              </p>
+              <form action="/update_venmo" method="POST">
+                <div class="mb-3">
+                  <label class="form-label fw-semibold small">Venmo Username</label>
+                  <div class="input-group">
+                    <span class="input-group-text fw-bold">@</span>
+                    <input type="text" name="venmo_username" class="form-control fw-semibold"
+                      value="{{ venmo_username }}" placeholder="YourVenmoHere" required
+                      autocomplete="off" spellcheck="false">
+                  </div>
+                  <div class="form-text text-muted">Enter without the @ symbol.</div>
+                </div>
+                <button type="submit" class="btn w-100 fw-bold text-white"
+                  style="background:#3D95CE;">
+                  Save Venmo Username
+                </button>
+              </form>
+            </div>
+          </div>
+
+        </div><!-- /col-lg-4 -->
+
+        <!-- Right: Tables -->
+        <div class="col-lg-8">
+
+          <!-- Stock Table -->
+          <div class="card table-card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center bg-dark text-white">
+              <span class="section-hdr">Current Stock Levels</span>
+              <span class="badge bg-secondary">{{ inventory|length }} items</span>
+            </div>
+            <div class="table-scroll">
+              <table class="table table-hover mb-0">
+                <thead class="sticky">
+                  <tr>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th>Price</th>
+                    <th>Stock</th>
+                  </tr>
+                </thead>
+                <tbody id="inv-tbody">
+                  {% for item in inventory %}
+                  <tr {% if item[4] <= 5 %}class="table-warning"{% endif %}>
+                    <td class="fw-semibold">{{ item[1] }}</td>
+                    <td><span class="badge bg-secondary">{{ item[2] }}</span></td>
+                    <td>${{ "%.2f"|format(item[3]) }}</td>
+                    <td>
+                      <div class="d-flex align-items-center gap-2">
+                        <span class="badge" style="background:{{ stock_color(item[4]) }};
+                          color:{{ stock_text_color(item[4]) }};min-width:36px;">
+                          {{ item[4] }}
+                        </span>
+                        <div class="stock-bar flex-grow-1">
+                          <div style="width:{{ stock_percent(item[4]) }}%;height:100%;
+                            background:{{ stock_color(item[4]) }};border-radius:4px;"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Transactions Ledger -->
+          <div class="card table-card">
+            <div class="card-header d-flex justify-content-between align-items-center bg-success text-white">
+              <span class="section-hdr">Recent Transactions Ledger</span>
+              <span class="badge bg-light text-success">{{ transactions|length }} shown</span>
+            </div>
+            <div class="table-scroll">
+              <ul id="tx-list" class="list-group list-group-flush">
+                {% for tx in transactions %}
+                <li class="list-group-item">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="text-muted small">{{ tx.timestamp }}</span>
+                    <span class="badge bg-success rounded-pill">${{ "%.2f"|format(tx.total) }}</span>
+                  </div>
+                  <ul class="mb-0 ps-3" style="font-size:.83rem;color:#555">
+                    {% for it in tx['items'] %}
+                      <li>{{ it[0] }}× {{ it[1] }}
+                        <span class="text-muted">(${{ "%.2f"|format(it[2]) }} ea)</span>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </li>
+                {% else %}
+                <li class="list-group-item text-center text-muted py-4">
+                  No transactions yet.
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+
+        </div><!-- /col-lg-8 -->
+      </div><!-- /row -->
+    </div>
+  </div><!-- /tab-inventory -->
+
+
+  <!-- ━━ TAB 2: SUGGESTIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="tab-pane fade" id="tab-suggestions" role="tabpanel">
+    <div class="container-fluid px-4 py-4">
+      <div class="card table-card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="section-hdr">💬 Suggestions &amp; Feedback Inbox</span>
+          <span class="badge bg-primary fs-6">{{ suggestions|length }}</span>
+        </div>
+        {% if suggestions %}
+        <div class="table-scroll">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="sticky table-light">
+              <tr>
+                <th style="width:50px">#</th>
+                <th style="width:160px">Timestamp</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in suggestions %}
+              <tr>
+                <td class="text-muted fw-semibold">{{ s[0] }}</td>
+                <td class="text-muted small">{{ s[1] }}</td>
+                <td class="sug-msg">{{ s[2] }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="card-body text-center text-muted py-5">
+          <div style="font-size:2.5rem">💬</div>
+          <p class="mt-2 mb-0">No suggestions submitted yet.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div><!-- /tab-suggestions -->
+
+
+  <!-- ━━ TAB 3: ANALYTICS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="tab-pane fade" id="tab-analytics" role="tabpanel">
+    <div class="container-fluid px-4 py-4">
+
+      <!-- KPI Row -->
+      <div class="row g-3 mb-4">
+
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card kpi-card p-3 text-center">
+            <div class="kpi-label">Total Revenue</div>
+            <div id="kpi-revenue" class="kpi-value text-success">${{ "%.2f"|format(revenue) }}</div>
+          </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card kpi-card p-3 text-center">
+            <div class="kpi-label">Total Expenses</div>
+            <div id="kpi-expenses" class="kpi-value text-danger">${{ "%.2f"|format(expenses_total) }}</div>
+          </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card kpi-card p-3 text-center">
+            <div class="kpi-label">Net Profit</div>
+            <div id="kpi-profit" class="kpi-value {{ 'text-success' if profit >= 0 else 'text-danger' }}">
+              {{ '-' if profit < 0 else '' }}${{ "%.2f"|format(profit|abs) }}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card kpi-card p-3 text-center">
+            <div class="kpi-label">Profit Margin</div>
+            <div id="kpi-margin" class="kpi-value {{ 'text-success' if profit_margin >= 0 else 'text-danger' }}">
+              {{ profit_margin }}%
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card kpi-card p-3 text-center">
+            <div class="kpi-label">Total Orders</div>
+            <div id="kpi-orders" class="kpi-value text-primary">{{ tx_count }}</div>
+          </div>
+        </div>
+
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card kpi-card p-3 text-center">
+            <div class="kpi-label">Avg Order Value</div>
+            <div id="kpi-avg" class="kpi-value text-primary">${{ "%.2f"|format(avg_order) }}</div>
+          </div>
+        </div>
+
+      </div><!-- /KPI row -->
+
+      <!-- Charts Row -->
+      <div class="row g-4 mb-4">
+
+        <!-- Top Selling Items -->
+        <div class="col-lg-6">
+          <div class="card table-card h-100">
+            <div class="card-header fw-bold">🏆 Top Items by Units Sold</div>
+            <div id="top-items-chart" class="card-body">
+              {% if top_items %}
+                {% for item in top_items %}
+                <div class="mb-3">
+                  <div class="d-flex justify-content-between bar-label mb-1">
+                    <span class="fw-semibold">{{ item[0] }}</span>
+                    <span class="text-muted">{{ item[1] }} units &middot; ${{ "%.2f"|format(item[2]) }}</span>
+                  </div>
+                  <div class="bar-track">
+                    <div class="bar-fill bg-primary"
+                      style="width:{{ ((item[1] / top_items_max) * 100) | round(1) }}%"></div>
+                  </div>
+                </div>
+                {% endfor %}
+              {% else %}
+                <p class="text-muted text-center py-4">No sales data yet.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Revenue by Category -->
+        <div class="col-lg-6">
+          <div class="card table-card h-100">
+            <div class="card-header fw-bold">📂 Revenue by Category</div>
+            <div id="cat-rev-chart" class="card-body">
+              {% if category_revenue %}
+                {% for cat in category_revenue %}
+                <div class="mb-3">
+                  <div class="d-flex justify-content-between bar-label mb-1">
+                    <span class="fw-semibold">{{ cat[0] }}</span>
+                    <span class="text-muted">${{ "%.2f"|format(cat[1]) }}</span>
+                  </div>
+                  <div class="bar-track">
+                    <div class="bar-fill"
+                      style="width:{{ ((cat[1] / cat_rev_max) * 100) | round(1) }}%;
+                             background:hsl({{ loop.index0 * 47 }},60%,50%)"></div>
+                  </div>
+                </div>
+                {% endfor %}
+              {% else %}
+                <p class="text-muted text-center py-4">No sales data yet.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /charts row -->
+
+      <!-- Daily Revenue + Low Stock Row -->
+      <div class="row g-4 mb-4">
+
+        <!-- 7-Day Sales Bar Chart -->
+        <div class="col-lg-8">
+          <div class="card table-card">
+            <div class="card-header fw-bold">📅 Sales — Last 7 Days</div>
+            <div id="daily-chart" class="card-body">
+              {% if daily_revenue %}
+              <div class="day-bar-wrap">
+                {% for day in daily_revenue %}
+                <div class="day-col">
+                  <span class="day-amt">${{ "%.0f"|format(day[1]) }}</span>
+                  <div class="day-bar"
+                    style="height:{{ ((day[1] / daily_max) * 80) | round(1) }}px"></div>
+                  <span class="day-lbl">{{ day[0][5:] }}</span>
+                </div>
+                {% endfor %}
+              </div>
+              {% else %}
+                <p class="text-muted text-center py-3">No sales in the last 7 days.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Low Stock Alerts -->
+        <div class="col-lg-4">
+          <div class="card table-card h-100">
+            <div class="card-header fw-bold text-danger">⚠️ Low Stock Alerts</div>
+            <div id="low-stock-body" class="card-body p-0">
+              {% if low_stock %}
+              <ul class="list-group list-group-flush">
+                {% for item in low_stock %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <span class="fw-semibold">{{ item[1] }}</span>
+                  <span class="badge bg-danger rounded-pill">{{ item[4] }} left</span>
+                </li>
+                {% endfor %}
+              </ul>
+              {% else %}
+              <div class="text-center text-muted py-4">
+                <div style="font-size:2rem">✅</div>
+                <p class="mt-1 mb-0 small">All items well-stocked.</p>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /daily + low stock row -->
+
+      <!-- Expense Log -->
+      <div class="row g-4">
+
+        <!-- Log Expense Form -->
+        <div class="col-lg-4">
+          <div class="card table-card">
+            <div class="card-header fw-bold">💸 Log Expense</div>
+            <div class="card-body">
+              <form action="/add_expense" method="POST">
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Date</label>
+                  <input type="text" name="exp_date" class="form-control"
+                    placeholder="e.g. June 10, 2026" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Description</label>
+                  <input type="text" name="exp_description" class="form-control"
+                    placeholder="e.g. Restock run — Walmart" required>
+                </div>
+                <div class="mb-4">
+                  <label class="form-label fw-semibold">Amount ($)</label>
+                  <input type="number" step="0.01" min="0" name="exp_amount"
+                    class="form-control" placeholder="0.00" required>
+                </div>
+                <button type="submit" class="btn btn-danger w-100 fw-bold">
+                  Log Expense
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Expense History -->
+        <div class="col-lg-8">
+          <div class="card table-card">
+            <div class="card-header d-flex justify-content-between align-items-center fw-bold">
+              <span>📋 Expense History</span>
+              {% if expense_log %}
+              <span class="text-muted fw-normal small">
+                Total: <strong class="text-danger">${{ "%.2f"|format(expenses_total) }}</strong>
+              </span>
+              {% endif %}
+            </div>
+            {% if expense_log %}
+            <div class="table-scroll">
+              <table class="table table-hover mb-0 align-middle">
+                <thead class="sticky table-light">
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th class="text-end">Amount</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for exp in expense_log %}
+                  <tr>
+                    <td class="text-muted small text-nowrap">{{ exp[1] }}</td>
+                    <td>{{ exp[2] }}</td>
+                    <td class="text-end fw-bold text-danger">${{ "%.2f"|format(exp[3]) }}</td>
+                    <td class="text-end">
+                      <form action="/delete_expense" method="POST" class="d-inline"
+                        onsubmit="return confirm('Remove this expense?')">
+                        <input type="hidden" name="expense_id" value="{{ exp[0] }}">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">✕</button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="card-body text-center text-muted py-5">
+              <div style="font-size:2rem">💸</div>
+              <p class="mt-2 mb-0">No expenses logged yet.</p>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+      </div><!-- /expense row -->
+    </div>
+  </div><!-- /tab-analytics -->
+
+
+  <!-- ━━ TAB 4: SALES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="tab-pane fade" id="tab-sales" role="tabpanel">
+    <div class="container-fluid px-4 py-4">
+      <div class="row g-4">
+
+        <!-- ── Left: Log & history ─────────────────────────────────────────── -->
+        <div class="col-lg-4">
+
+          <!-- Add Restock Date -->
+          <div class="card table-card mb-4">
+            <div class="card-header fw-bold text-white" style="background:#198754;">
+              📦 Log Restock Date
+            </div>
+            <div class="card-body">
+              <p class="small text-muted mb-3">
+                Record each date you restocked the store. Sales are automatically
+                tallied between consecutive restock dates.
+              </p>
+              <form action="/add_restock" method="POST">
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Restock Date</label>
+                  <input type="date" name="restock_date" class="form-control fw-semibold"
+                    max="{{ today }}" required>
+                  <div class="form-text text-muted">Tap the field to open the calendar.</div>
+                </div>
+                <button type="submit" class="btn btn-success w-100 fw-bold">
+                  Add Restock Date
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Restock date list (for deletes) -->
+          <div class="card table-card">
+            <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+              <span>📅 All Restock Dates</span>
+              <span class="badge bg-secondary">{{ restock_periods | length }}</span>
+            </div>
+            {% if restock_periods %}
+            <ul class="list-group list-group-flush">
+              {% for p in restock_periods %}
+              <li class="list-group-item d-flex justify-content-between align-items-center py-2 pe-2">
+                <div>
+                  <span class="fw-semibold small">{{ p.display_start }}</span>
+                  {% if p.is_current %}
+                  <span class="badge bg-success ms-1" style="font-size:.65rem;">Current</span>
+                  {% endif %}
+                </div>
+                <form action="/delete_restock" method="POST" class="d-inline"
+                  onsubmit="return confirm('Remove this restock date? This only removes the marker — no sales data is deleted.')">
+                  <input type="hidden" name="restock_id" value="{{ p.id }}">
+                  <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2"
+                    style="font-size:.75rem;">✕</button>
+                </form>
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <div class="card-body text-center text-muted py-4">
+              <div style="font-size:2rem;">📦</div>
+              <p class="mt-2 mb-0 small">No restock dates logged yet.</p>
+            </div>
+            {% endif %}
+          </div>
+
+        </div><!-- /col-lg-4 -->
+
+        <!-- ── Right: Sales by period ──────────────────────────────────────── -->
+        <div class="col-lg-8">
+          <div class="card table-card">
+            <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+              <span>📈 Sales by Restock Period</span>
+              {% if restock_periods %}
+              <span class="badge bg-primary">
+                {{ restock_periods | length }} period{{ 's' if restock_periods | length != 1 else '' }}
+              </span>
+              {% endif %}
+            </div>
+
+            {% if restock_periods %}
+            <div class="accordion accordion-flush" id="salesAccordion">
+              {% for p in restock_periods %}
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="hdr-{{ p.id }}">
+                  <button
+                    class="accordion-button fw-semibold {% if not loop.first %}collapsed{% endif %}"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#period-{{ p.id }}"
+                    aria-expanded="{{ 'true' if loop.first else 'false' }}"
+                    aria-controls="period-{{ p.id }}">
+                    <span class="me-2" style="font-size:1.1rem;">📦</span>
+                    <span>{{ p.display_start }}</span>
+                    <span class="text-muted mx-2">→</span>
+                    <span class="{{ 'text-success fw-bold' if p.is_current else 'text-dark' }}">
+                      {{ p.display_end }}
+                    </span>
+                    {% if p.is_current %}
+                    <span class="badge bg-success ms-2" style="font-size:.68rem;">Current</span>
+                    {% endif %}
+                  </button>
+                </h2>
+                <div
+                  id="period-{{ p.id }}"
+                  class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+                  data-start="{{ p.start }}"
+                  data-end="{{ p.end }}"
+                  aria-labelledby="hdr-{{ p.id }}"
+                  data-bs-parent="#salesAccordion">
+                  <div class="accordion-body p-0">
+                    <!-- Filled by JS -->
+                    <div class="sales-period-body p-4 text-center text-muted small">
+                      <div class="spinner-border spinner-border-sm me-2" role="status"
+                        aria-hidden="true"></div>
+                      Loading sales data…
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+
+            {% else %}
+            <div class="card-body text-center text-muted py-5">
+              <div style="font-size:3rem;">📈</div>
+              <p class="mt-3 mb-1 fw-semibold">No restock dates logged yet.</p>
+              <p class="small mb-0">Add a restock date on the left to start tracking sales by period.</p>
+            </div>
+            {% endif %}
+
+          </div>
+        </div><!-- /col-lg-8 -->
+
+      </div><!-- /row -->
+    </div>
+  </div><!-- /tab-sales -->
+
+
+</div><!-- /tab-content -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ── Tab restoration ──────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const urlTab    = new URLSearchParams(window.location.search).get('tab');
+  const savedTab  = urlTab || sessionStorage.getItem('adminActiveTab') || 'inventory';
+  const tabEl     = document.querySelector(`[data-bs-target="#tab-${savedTab}"]`);
+  if (tabEl) new bootstrap.Tab(tabEl).show();
+
+  document.querySelectorAll('[data-bs-toggle="tab"]').forEach(el => {
+    el.addEventListener('shown.bs.tab', e => {
+      const id = (e.target.getAttribute('data-bs-target') || '').replace('#tab-', '');
+      if (id) sessionStorage.setItem('adminActiveTab', id);
+      // highlight active pill in navbar
+      document.querySelectorAll('.top-nav .nav-link').forEach(l => l.classList.remove('active'));
+      e.target.classList.add('active');
+    });
+  });
+
+  // Keep inner item tab styles consistent
+  document.querySelectorAll('#itemTabs .nav-link').forEach(tab => {
+    tab.addEventListener('show.bs.tab', function(e) {
+      document.querySelectorAll('#itemTabs .nav-link').forEach(t => {
+        t.classList.remove('text-dark', 'bg-white');
+        t.classList.add('text-white');
+      });
+      e.target.classList.add('text-dark', 'bg-white');
+      e.target.classList.remove('text-white');
+    });
+  });
+});
+
+// ── Sales period lazy loader ─────────────────────────────────────────────────
+function renderSalesPeriod(bodyEl, data) {
+  if (!data.items || data.items.length === 0) {
+    bodyEl.innerHTML = `
+      <div class="text-center text-muted py-4">
+        <div style="font-size:2rem">🛒</div>
+        <p class="mt-2 mb-0 small">No sales recorded in this period.</p>
+      </div>`;
+    return;
+  }
+  const rows = data.items.map(item => `
+    <tr>
+      <td class="fw-semibold">${item.name}</td>
+      <td class="text-center">
+        <span class="badge bg-primary rounded-pill px-3">${item.qty}</span>
+      </td>
+      <td class="text-end fw-bold text-success">$${item.rev.toFixed(2)}</td>
+    </tr>`).join('');
+  bodyEl.innerHTML = `
+    <div class="table-scroll" style="max-height:300px">
+      <table class="table table-hover mb-0 align-middle">
+        <thead class="sticky table-light">
+          <tr>
+            <th>Item</th>
+            <th class="text-center" style="width:110px">Units Sold</th>
+            <th class="text-end"    style="width:110px">Revenue</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot class="table-light fw-bold border-top border-2">
+          <tr>
+            <td>Total</td>
+            <td class="text-center">${data.total_units} unit${data.total_units !== 1 ? 's' : ''}</td>
+            <td class="text-end text-success">$${data.total_rev.toFixed(2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+}
+
+function loadSalesPeriod(collapseEl) {
+  if (collapseEl._salesLoaded) return;
+  const start  = collapseEl.dataset.start;
+  const end    = collapseEl.dataset.end || '';
+  const bodyEl = collapseEl.querySelector('.sales-period-body');
+  if (!bodyEl || !start) return;
+  const url = `/api/sales_period?start=${encodeURIComponent(start)}`
+            + (end ? `&end=${encodeURIComponent(end)}` : '');
+  fetch(url)
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(data => { collapseEl._salesLoaded = true; renderSalesPeriod(bodyEl, data); })
+    .catch(() => {
+      bodyEl.innerHTML = '<p class="text-danger text-center py-3 mb-0 small">Failed to load — try refreshing.</p>';
+    });
+}
+
+// Wire accordion + auto-load first open period
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('#salesAccordion .accordion-collapse').forEach(el => {
+    el.addEventListener('show.bs.collapse', () => loadSalesPeriod(el));
+    if (el.classList.contains('show')) loadSalesPeriod(el);
+  });
+});
+
+// ── Live-update system ───────────────────────────────────────────────────────
+const INIT_LAST_TX = {{ last_tx_id }};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmt2(n) { return Number(n).toFixed(2); }
+function stockPct(s)   { return Math.max(0, Math.min(100, Math.round(s / 50 * 100))); }
+function stockClr(s)   { return `hsl(${Math.round(Math.max(0,Math.min(1,s/50))*120)},75%,45%)`; }
+function stockTxt(s)   { return s >= 18 ? '#111' : '#fff'; }
+
+// ── Toast notification ────────────────────────────────────────────────────────
+function showSaleToast(tx) {
+  const lines = tx.items.map(it => `${it[0]}× ${esc(it[1])}`).join(', ');
+  const wrap  = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="toast align-items-center text-white bg-success border-0 mb-2"
+         role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body fw-semibold">
+          🛒 New Sale — <strong>$${fmt2(tx.total)}</strong>
+          <div class="small fw-normal mt-1 opacity-75">${lines}</div>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto"
+          data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>`;
+  const el = wrap.firstElementChild;
+  document.getElementById('toast-container').appendChild(el);
+  const t = new bootstrap.Toast(el, { delay: 7000 });
+  t.show();
+  el.addEventListener('hidden.bs.toast', () => el.remove());
+}
+
+// ── DOM updaters ─────────────────────────────────────────────────────────────
+function updateKPIs(d) {
+  const get = id => document.getElementById(id);
+  get('kpi-revenue').textContent  = `$${fmt2(d.revenue)}`;
+  get('kpi-expenses').textContent = `$${fmt2(d.expenses_total)}`;
+  const p = get('kpi-profit');
+  p.textContent = (d.profit < 0 ? '-' : '') + '$' + fmt2(Math.abs(d.profit));
+  p.className   = 'kpi-value ' + (d.profit >= 0 ? 'text-success' : 'text-danger');
+  const m = get('kpi-margin');
+  m.textContent = `${d.profit_margin}%`;
+  m.className   = 'kpi-value ' + (d.profit_margin >= 0 ? 'text-success' : 'text-danger');
+  get('kpi-orders').textContent = d.tx_count;
+  get('kpi-avg').textContent    = `$${fmt2(d.avg_order)}`;
+}
+
+function updateInventoryTable(items) {
+  const tb = document.getElementById('inv-tbody');
+  if (!tb) return;
+  tb.innerHTML = items.map(i => `
+    <tr${i.stock <= 5 ? ' class="table-warning"' : ''}>
+      <td class="fw-semibold">${esc(i.name)}</td>
+      <td><span class="badge bg-secondary">${esc(i.category)}</span></td>
+      <td>$${fmt2(i.price)}</td>
+      <td>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge"
+            style="background:${stockClr(i.stock)};color:${stockTxt(i.stock)};min-width:36px;">
+            ${i.stock}
+          </span>
+          <div class="stock-bar flex-grow-1">
+            <div style="width:${stockPct(i.stock)}%;height:100%;
+              background:${stockClr(i.stock)};border-radius:4px;"></div>
+          </div>
+        </div>
+      </td>
+    </tr>`).join('');
+  // Keep auto-fill data in sync
+  window.invData = items.map(i => [i.id, i.name, i.category, i.price, i.stock]);
+  // Refresh datalist
+  const dl = document.getElementById('inv-list');
+  if (dl) dl.innerHTML = items.map(i => `<option value="${esc(i.name)}">`).join('');
+}
+
+function updateTransactions(txs) {
+  const ul = document.getElementById('tx-list');
+  if (!ul) return;
+  if (!txs.length) {
+    ul.innerHTML = `<li class="list-group-item text-center text-muted py-4">No transactions yet.</li>`;
+    return;
+  }
+  ul.innerHTML = txs.map(tx => `
+    <li class="list-group-item">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="text-muted small">${tx.timestamp}</span>
+        <span class="badge bg-success rounded-pill">$${fmt2(tx.total)}</span>
+      </div>
+      <ul class="mb-0 ps-3" style="font-size:.83rem;color:#555">
+        ${tx.items.map(it =>
+          `<li>${it[0]}× ${esc(it[1])} <span class="text-muted">($${fmt2(it[2])} ea)</span></li>`
+        ).join('')}
+      </ul>
+    </li>`).join('');
+}
+
+function updateTopItemsChart(items, max) {
+  const el = document.getElementById('top-items-chart');
+  if (!el) return;
+  el.innerHTML = items.length
+    ? items.map(it => `
+        <div class="mb-3">
+          <div class="d-flex justify-content-between bar-label mb-1">
+            <span class="fw-semibold">${esc(it.name)}</span>
+            <span class="text-muted">${it.qty} units &middot; $${fmt2(it.rev)}</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill bg-primary"
+              style="width:${((it.qty/max)*100).toFixed(1)}%"></div>
+          </div>
+        </div>`).join('')
+    : '<p class="text-muted text-center py-4">No sales data yet.</p>';
+}
+
+function updateCatRevChart(cats, max) {
+  const el = document.getElementById('cat-rev-chart');
+  if (!el) return;
+  el.innerHTML = cats.length
+    ? cats.map((c, i) => `
+        <div class="mb-3">
+          <div class="d-flex justify-content-between bar-label mb-1">
+            <span class="fw-semibold">${esc(c.cat)}</span>
+            <span class="text-muted">$${fmt2(c.rev)}</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill"
+              style="width:${((c.rev/max)*100).toFixed(1)}%;background:hsl(${i*47},60%,50%)"></div>
+          </div>
+        </div>`).join('')
+    : '<p class="text-muted text-center py-4">No sales data yet.</p>';
+}
+
+function updateDailyChart(days, max) {
+  const el = document.getElementById('daily-chart');
+  if (!el) return;
+  el.innerHTML = days.length
+    ? `<div class="day-bar-wrap">${days.map(d => `
+        <div class="day-col">
+          <span class="day-amt">$${Math.round(d.rev)}</span>
+          <div class="day-bar" style="height:${((d.rev/max)*80).toFixed(1)}px"></div>
+          <span class="day-lbl">${d.day.slice(5)}</span>
+        </div>`).join('')}</div>`
+    : '<p class="text-muted text-center py-3">No sales in the last 7 days.</p>';
+}
+
+function updateLowStock(items) {
+  const el = document.getElementById('low-stock-body');
+  if (!el) return;
+  el.innerHTML = items.length
+    ? `<ul class="list-group list-group-flush">${items.map(i => `
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">${esc(i.name)}</span>
+          <span class="badge bg-danger rounded-pill">${i.stock} left</span>
+        </li>`).join('')}</ul>`
+    : `<div class="text-center text-muted py-4">
+        <div style="font-size:2rem">✅</div>
+        <p class="mt-1 mb-0 small">All items well-stocked.</p>
+      </div>`;
+}
+
+// ── Live pulse indicator ──────────────────────────────────────────────────────
+function setLiveOk(ok) {
+  const dot    = document.getElementById('live-pulse');
+  const status = document.getElementById('live-status');
+  if (!dot) return;
+  dot.style.background  = ok ? '#28a745' : '#dc3545';
+  status.textContent    = ok ? 'LIVE' : 'OFFLINE';
+}
+function flashPulse() {
+  const dot = document.getElementById('live-pulse');
+  if (!dot) return;
+  dot.style.background = '#fff';
+  setTimeout(() => { dot.style.background = '#28a745'; }, 350);
+}
+
+// ── Poll loop ─────────────────────────────────────────────────────────────────
+let _lastTxId = INIT_LAST_TX;
+
+async function pollLiveData() {
+  try {
+    const resp = await fetch(`/api/live_data?since_tx=${_lastTxId}`);
+    if (!resp.ok) throw new Error(resp.status);
+    const d = await resp.json();
+    setLiveOk(true);
+
+    if (d.new_transactions && d.new_transactions.length) {
+      flashPulse();
+      d.new_transactions.forEach(showSaleToast);
+      // Invalidate + reload any open sales-period accordion panels
+      document.querySelectorAll('#salesAccordion .accordion-collapse').forEach(el => {
+        el._salesLoaded = false;
+        if (el.classList.contains('show')) loadSalesPeriod(el);
+      });
+    }
+
+    if (d.last_tx_id) _lastTxId = d.last_tx_id;
+
+    updateKPIs(d);
+    updateInventoryTable(d.inventory        || []);
+    updateTransactions(d.transactions       || []);
+    updateTopItemsChart(d.top_items         || [], d.top_items_max    || 1);
+    updateCatRevChart(d.category_revenue    || [], d.cat_rev_max      || 1);
+    updateDailyChart(d.daily_revenue        || [], d.daily_max        || 0.01);
+    updateLowStock(d.low_stock              || []);
+
+  } catch (e) {
+    console.warn('Live poll error:', e);
+    setLiveOk(false);
+  }
+  setTimeout(pollLiveData, 8000);
+}
+
+// Start polling 8 s after page load so initial render isn't disrupted
+setTimeout(pollLiveData, 8000);
+
+// ── Auto-fill update form ────────────────────────────────────────────────────
+const invData = {{ inventory | tojson }};
+const nameInput = document.getElementById('update-name');
+if (nameInput) {
+  nameInput.addEventListener('input', function () {
+    const item = invData.find(i => i[1] === this.value);
+    if (item) {
+      document.getElementById('update-category').value = item[2];
+      document.getElementById('update-price').value    = item[3].toFixed(2);
+      document.getElementById('update-stock').value    = item[4];
+    }
+  });
+}
+</script>
+</body>
+</html>
