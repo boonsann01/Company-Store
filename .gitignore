@@ -1,0 +1,18 @@
+# Virtual environment
+venv/
+
+# Database (contains real transaction data — never commit)
+store.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment files (contains passwords/secrets)
+.env
+*.env
+
+# OS junk
+.DS_Store
+Thumbs.db
