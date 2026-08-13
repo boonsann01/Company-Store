@@ -1,0 +1,10 @@
+# Normalize all text files to LF inside the repository.
+# The kiosk is deployed on Linux (Raspberry Pi); committing CRLF from a Windows
+# dev machine causes whole-file diffs and noisy history.
+* text=auto eol=lf
+
+# Binary — never touch line endings
+*.db  binary
+*.png binary
+*.jpg binary
+*.ico binary

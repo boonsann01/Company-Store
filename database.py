@@ -8,9 +8,16 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
-            category TEXT NOT NULL, price REAL NOT NULL, stock INTEGER NOT NULL
+            category TEXT NOT NULL, price REAL NOT NULL, stock INTEGER NOT NULL,
+            max_stock INTEGER NOT NULL DEFAULT 0
         )
     ''')
+    # Migration: add max_stock column to existing databases
+    try:
+        cursor.execute('ALTER TABLE inventory ADD COLUMN max_stock INTEGER NOT NULL DEFAULT 0')
+        cursor.execute('UPDATE inventory SET max_stock = stock WHERE max_stock = 0')
+    except Exception:
+        pass  # Column already exists
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, total REAL NOT NULL
@@ -75,7 +82,8 @@ def init_db():
             ('Ben & Jerry\'s', 'Frozen', 5.50, 10), ('Ice Cream Sand.', 'Frozen', 2.00, 15),
             ('Quest Bar', 'Shelf Snacks', 2.50, 20), ('Doritos (Nacho)', 'Shelf Snacks', 1.50, 15)
         ]
-        cursor.executemany('INSERT INTO inventory (name, category, price, stock) VALUES (?, ?, ?, ?)', sample_items)
+        cursor.executemany('INSERT INTO inventory (name, category, price, stock, max_stock) VALUES (?, ?, ?, ?, ?)',
+                           [(n, c, p, s, s) for n, c, p, s in sample_items])
         seed_ts = datetime.datetime.now().strftime("%m/%d/%Y · %I:%M %p")
         cursor.execute('INSERT INTO announcements (date, message) VALUES (?, ?)', (seed_ts, "Welcome to the new digital company store. Tap the screen to start your order!"))
         conn.commit()
@@ -106,7 +114,7 @@ def get_inventory():
 def get_all_inventory():
     conn = sqlite3.connect('store.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT id, name, category, price, stock FROM inventory')
+    cursor.execute('SELECT id, name, category, price, stock, max_stock FROM inventory')
     items = cursor.fetchall(); conn.close()
     return items
 
@@ -115,7 +123,8 @@ def add_inventory_item(name, category, price, stock):
         raise ValueError('Price and stock cannot be negative.')
     conn = sqlite3.connect('store.db')
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO inventory (name, category, price, stock) VALUES (?, ?, ?, ?)', (name, category, price, stock))
+    cursor.execute('INSERT INTO inventory (name, category, price, stock, max_stock) VALUES (?, ?, ?, ?, ?)',
+                   (name, category, price, stock, stock))
     conn.commit(); conn.close()
 
 def update_inventory_item(name, category, price, stock):
@@ -123,7 +132,10 @@ def update_inventory_item(name, category, price, stock):
         raise ValueError('Price and stock cannot be negative.')
     conn = sqlite3.connect('store.db')
     cursor = conn.cursor()
-    cursor.execute('UPDATE inventory SET category = ?, price = ?, stock = ? WHERE name = ?', (category, price, stock, name))
+    cursor.execute(
+        'UPDATE inventory SET category = ?, price = ?, stock = ?, max_stock = MAX(max_stock, ?) WHERE name = ?',
+        (category, price, stock, stock, name)
+    )
     conn.commit(); conn.close()
 
 # --- NEW: Delete Item ---

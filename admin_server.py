@@ -48,18 +48,21 @@ def parse_inventory_values():
     return price, stock
 
 
-def stock_percent(stock):
-    return max(0, min(100, round((stock / 50) * 100)))
+def stock_percent(stock, max_stock):
+    if not max_stock:
+        return 100
+    return max(0, min(100, round((stock / max_stock) * 100)))
 
 
-def stock_color(stock):
-    ratio = max(0, min(1, stock / 50))
+def stock_color(stock, max_stock):
+    ratio = max(0, min(1, stock / max_stock)) if max_stock else 1
     hue = round(ratio * 120)
     return f'hsl({hue}, 75%, 45%)'
 
 
-def stock_text_color(stock):
-    return '#111111' if stock >= 18 else '#ffffff'
+def stock_text_color(stock, max_stock):
+    ratio = (stock / max_stock) if max_stock else 1
+    return '#111111' if ratio >= 0.36 else '#ffffff'
 
 
 LOGIN_TEMPLATE = """
@@ -153,7 +156,7 @@ def dashboard():
     expense_log    = database.get_expense_log()
 
     # Low stock items (≤ 5)
-    low_stock = [i for i in inventory if i[4] <= 5]
+    low_stock = [i for i in inventory if i[5] and i[4] <= i[5] * 0.25]
 
     # Settings
     venmo_username = database.get_setting('venmo_username', VENMO_USERNAME)
@@ -369,7 +372,7 @@ def api_live_data():
             for tx in transactions
         ],
         'inventory':        [{'id': i[0], 'name': i[1], 'category': i[2],
-                               'price': i[3], 'stock': i[4]} for i in inventory],
+                               'price': i[3], 'stock': i[4], 'max_stock': i[5]} for i in inventory],
         'revenue':          revenue,
         'expenses_total':   expenses_total,
         'profit':           profit,
@@ -382,7 +385,7 @@ def api_live_data():
         'cat_rev_max':      cat_rev_max,
         'daily_revenue':    [{'day': d[0], 'rev': d[1]} for d in daily_revenue],
         'daily_max':        daily_max,
-        'low_stock':        [{'id': i[0], 'name': i[1], 'stock': i[4]} for i in low_stock],
+        'low_stock':        [{'id': i[0], 'name': i[1], 'stock': i[4], 'max_stock': i[5]} for i in low_stock],
     })
 
 
@@ -437,6 +440,20 @@ def api_categories():
 def api_announcements():
     rows = database.get_announcements()
     return jsonify([{'date': r[0], 'message': r[1]} for r in rows])
+
+
+@app.route('/api/kiosk_poll')
+def api_kiosk_poll():
+    """Single no-auth endpoint polled every 20 s by the kiosk for live inventory + announcement updates."""
+    items = database.get_all_inventory()
+    rows  = database.get_announcements()
+    cats  = database.get_categories()
+    return jsonify({
+        'inventory':     [{'id': i[0], 'name': i[1], 'category': i[2],
+                           'price': i[3], 'stock': i[4]} for i in items],
+        'announcements': [{'date': r[0], 'message': r[1]} for r in rows],
+        'categories':    cats,
+    })
 
 
 @app.route('/api/checkout', methods=['POST'])

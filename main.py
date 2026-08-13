@@ -23,10 +23,10 @@ if __name__ == '__main__':
     webview.create_window(
         title='Company Store Kiosk',
         url='http://127.0.0.1:5000/kiosk',
-        width=1280,
-        height=800,
+        width=1024,
+        height=600,
         resizable=False,
-        min_size=(1280, 800),
+        min_size=(1024, 600),
         background_color='#04060F',
         # Set fullscreen=True when deploying on the Pi
         fullscreen=False,

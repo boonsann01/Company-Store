@@ -64,61 +64,61 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
 /* ── Hero center ── */
 .hero-center{position:relative;z-index:2;flex:1;display:flex;
   flex-direction:column;align-items:center;justify-content:center;
-  gap:14px;text-align:center;padding:0 80px}
+  gap:10px;text-align:center;padding:0 48px}
 .hero-eyebrow{font-size:11px;font-weight:800;letter-spacing:.22em;
   color:rgba(100,170,255,.75);text-transform:uppercase;margin-bottom:4px}
-.hero-title{font-size:90px;font-weight:900;color:#fff;
-  letter-spacing:-3px;line-height:.95;
+.hero-title{font-size:66px;font-weight:900;color:#fff;
+  letter-spacing:-2px;line-height:.95;
   text-shadow:0 0 120px rgba(50,120,255,.45),0 2px 40px rgba(0,0,0,.6)}
 /* Cycling subtitle */
-.hero-sub-wrap{height:30px;overflow:hidden;
-  display:flex;align-items:center;justify-content:center;margin-top:6px}
-.hero-sub{font-size:15px;font-weight:800;color:rgba(120,185,255,.85);
+.hero-sub-wrap{height:24px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;margin-top:4px}
+.hero-sub{font-size:13px;font-weight:800;color:rgba(120,185,255,.85);
   text-transform:uppercase;letter-spacing:.22em;white-space:nowrap;line-height:1;display:block;
   text-shadow:0 0 18px rgba(80,160,255,.55),0 0 40px rgba(60,120,255,.25);
   transition:opacity .3s ease, transform .38s cubic-bezier(.22,1,.36,1)}
 .hero-cta{background:linear-gradient(135deg,#007AFF,#0051D5);color:#fff;
-  border:none;border-radius:32px;font-size:24px;font-weight:800;
-  padding:20px 76px;cursor:pointer;margin-top:20px;
+  border:none;border-radius:28px;font-size:19px;font-weight:800;
+  padding:15px 56px;cursor:pointer;margin-top:14px;
   box-shadow:0 0 55px rgba(0,122,255,.5),0 8px 32px rgba(0,0,0,.45);
   transition:transform .14s,box-shadow .14s;font-family:inherit}
 .hero-cta:active{transform:scale(.96);
   box-shadow:0 0 28px rgba(0,122,255,.35),0 4px 16px rgba(0,0,0,.4)}
-.hero-hint{font-size:13px;color:rgba(255,255,255,.25);margin-top:-6px}
+.hero-hint{font-size:12px;color:rgba(255,255,255,.25);margin-top:-4px}
 
 /* ── Bottom bar (news + feedback) ── */
 .hero-bottom{position:relative;z-index:2;display:flex;
   align-items:flex-end;justify-content:space-between;
-  padding:0 28px 26px;width:100%;flex-shrink:0;gap:20px}
+  padding:0 20px 14px;width:100%;flex-shrink:0;gap:16px}
 
 /* Frosted glass news card */
 .news-glass{background:rgba(255,255,255,.07);
   backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  border:1px solid rgba(255,255,255,.11);border-radius:22px;
-  padding:18px 22px;max-width:600px;overflow:hidden}
-.news-glass-label{font-size:11px;font-weight:800;letter-spacing:.2em;
-  color:rgba(100,170,255,.8);text-transform:uppercase;margin-bottom:12px}
-.news-glass-item{margin-bottom:10px}
+  border:1px solid rgba(255,255,255,.11);border-radius:18px;
+  padding:14px 18px;max-width:460px;overflow:hidden}
+.news-glass-label{font-size:10px;font-weight:800;letter-spacing:.2em;
+  color:rgba(100,170,255,.8);text-transform:uppercase;margin-bottom:10px}
+.news-glass-item{margin-bottom:8px}
 .news-glass-item:last-child{margin-bottom:0}
-.news-glass-date{font-size:11px;font-weight:700;letter-spacing:.06em;
-  color:rgba(100,170,255,.8);margin-bottom:5px;font-variant-numeric:tabular-nums}
-.news-glass-msg{font-size:14px;color:rgba(255,255,255,.72);line-height:1.45;font-weight:500}
+.news-glass-date{font-size:10px;font-weight:700;letter-spacing:.06em;
+  color:rgba(100,170,255,.8);margin-bottom:4px;font-variant-numeric:tabular-nums}
+.news-glass-msg{font-size:13px;color:rgba(255,255,255,.72);line-height:1.45;font-weight:500}
 
 /* Frosted glass feedback button */
 .feedback-ghost{background:rgba(255,255,255,.08);
   backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  border:1px solid rgba(255,255,255,.16);border-radius:26px;
-  color:rgba(255,255,255,.72);font-size:15px;font-weight:700;
-  padding:14px 26px;cursor:pointer;white-space:nowrap;
+  border:1px solid rgba(255,255,255,.16);border-radius:22px;
+  color:rgba(255,255,255,.72);font-size:13px;font-weight:700;
+  padding:11px 20px;cursor:pointer;white-space:nowrap;
   transition:background .15s,color .15s;font-family:inherit;flex-shrink:0}
 .feedback-ghost:active{background:rgba(255,255,255,.18);color:#fff}
 
 /* ══ CHECKOUT SCREEN ════════════════════════════════ */
 #screen-checkout .inner{/* filled by .screen .inner */}
 .checkout-left{flex:1 1 0;min-width:0;display:flex;flex-direction:column;
-  padding:20px 12px 20px 24px;gap:10px;overflow:hidden}
+  padding:14px 10px 14px 16px;gap:8px;overflow:hidden}
 .co-header{display:flex;justify-content:space-between;align-items:center}
-.section-title{font-size:32px;font-weight:800;color:#fff;
+.section-title{font-size:22px;font-weight:800;color:#fff;
   text-shadow:0 2px 20px rgba(0,0,0,.5)}
 /* ── Category bar — animated sliding pill (21st.dev style) ── */
 .category-bar{
@@ -144,17 +144,18 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
   transition:left .3s cubic-bezier(.4,0,.2,1),width .3s cubic-bezier(.4,0,.2,1);
   pointer-events:none;z-index:0}
 .pill{
-  flex-shrink:0;padding:9px 24px;border-radius:14px;
+  flex-shrink:0;padding:7px 18px;border-radius:14px;
   border:none;background:transparent;
-  cursor:pointer;font-weight:600;font-size:14px;letter-spacing:.01em;
+  cursor:pointer;font-weight:600;font-size:13px;letter-spacing:.01em;
   font-family:inherit;color:rgba(255,255,255,.45);
   position:relative;z-index:1;white-space:nowrap;
   transition:color .22s ease}
 .pill.active{color:#fff;font-weight:750}
 .pill:not(.active):hover{color:rgba(255,255,255,.78)}
 .pill:not(.active):active{color:rgba(255,255,255,.9)}
-.item-grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);
-  gap:12px;align-content:start;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.item-grid{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);
+  grid-auto-rows:minmax(155px,auto);
+  gap:10px;align-content:start;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .item-grid::-webkit-scrollbar{display:none}
 /* ── Item Cards (liquid glass style) ── */
 .item-card{background:rgba(255,255,255,.09);border-radius:20px;overflow:hidden;
@@ -176,11 +177,11 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
   text-shadow:0 1px 3px rgba(0,0,0,.4)}
 
 /* Visual header */
-.card-visual{height:96px;position:relative;display:flex;
+.card-visual{height:72px;position:relative;display:flex;
   align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
 .card-visual::after{content:'';position:absolute;inset:0;
   background:linear-gradient(to bottom,transparent 40%,rgba(0,0,0,.22))}
-.card-emoji{font-size:46px;z-index:1;
+.card-emoji{font-size:34px;z-index:1;
   filter:drop-shadow(0 3px 6px rgba(0,0,0,.35));line-height:1}
 
 /* In-cart overlay — #090681 tint from the design reference */
@@ -198,47 +199,48 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
   font-weight:800;text-align:center;padding:2px 0;letter-spacing:.04em}
 
 /* Card body */
-.card-body-inner{padding:10px 12px 12px;display:flex;
+.card-body-inner{padding:8px 10px 10px;display:flex;
   flex-direction:column;gap:2px;flex:1}
-.item-name{font-size:13px;font-weight:700;line-height:1.3;
+.item-name{font-size:12px;font-weight:700;line-height:1.3;
   color:#fff;overflow:hidden;display:-webkit-box;
   -webkit-line-clamp:2;-webkit-box-orient:vertical}
-.item-price{font-size:18px;font-weight:800;color:var(--accent);margin-top:2px}
+.item-price{font-size:15px;font-weight:800;color:var(--accent);margin-top:2px}
 .card-footer-row{display:flex;justify-content:space-between;
   align-items:center;margin-top:4px}
 .item-stock{font-size:11px;color:rgba(255,255,255,.55);font-weight:500}
-.add-btn{width:30px;height:30px;border-radius:15px;background:var(--accent);
-  color:#fff;border:none;font-size:20px;font-weight:700;cursor:pointer;
+.add-btn{position:absolute;right:8px;bottom:8px;z-index:4;
+  width:26px;height:26px;border-radius:13px;background:var(--accent);
+  color:#fff;border:none;font-size:17px;font-weight:700;cursor:pointer;
   display:flex;align-items:center;justify-content:center;line-height:1;
-  transition:background .1s,transform .1s;flex-shrink:0}
+  transition:background .1s,transform .1s;box-shadow:0 2px 8px rgba(0,0,0,.35)}
 .add-btn:active{background:var(--accent-dark);transform:scale(.9)}
 .no-items{color:rgba(255,255,255,.5);font-weight:600;padding:20px;grid-column:1/-1}
 
 /* Cart — liquid glass panel */
-.cart-panel{flex:0 0 260px;width:260px;
+.cart-panel{flex:0 0 220px;width:220px;
   background:rgba(255,255,255,.07);
   backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
   border-left:1px solid rgba(255,255,255,.12);
   display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .cart-head{display:flex;justify-content:space-between;align-items:center;
-  padding:20px 16px 10px;flex-shrink:0}
-.cart-title{font-size:24px;font-weight:800;color:#fff}
+  padding:14px 12px 8px;flex-shrink:0}
+.cart-title{font-size:20px;font-weight:800;color:#fff}
 .btn-icon{width:34px;height:34px;border-radius:17px;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   cursor:pointer;font-size:14px;font-weight:700;color:#fff;
   transition:background .12s,color .12s,border-color .12s;font-family:inherit}
 .btn-icon:hover{background:var(--danger);color:#fff;border-color:var(--danger)}
-.cancel-menu{display:flex;gap:6px;padding:0 16px 10px;flex-shrink:0}
+.cancel-menu{display:flex;gap:5px;padding:0 12px 8px;flex-shrink:0}
 .cancel-menu.hidden{display:none}
-.cart-list{flex:1;overflow-y:auto;padding:0 10px;
+.cart-list{flex:1;overflow-y:auto;padding:0 8px;
   scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .cart-list::-webkit-scrollbar{display:none}
 .empty-cart{text-align:center;color:rgba(255,255,255,.45);font-size:15px;
   font-weight:600;padding:28px 0}
 .cart-item{display:grid;grid-template-columns:26px 26px 1fr auto;align-items:center;
-  gap:6px;background:rgba(255,255,255,.07);border-radius:14px;
-  border:1px solid rgba(255,255,255,.12);padding:8px 10px;margin-bottom:8px}
+  gap:5px;background:rgba(255,255,255,.07);border-radius:12px;
+  border:1px solid rgba(255,255,255,.12);padding:6px 8px;margin-bottom:6px}
 .qty-badge{width:26px;height:26px;border-radius:13px;background:var(--accent);
   color:#fff;font-size:12px;font-weight:700;display:flex;
   align-items:center;justify-content:center;flex-shrink:0}
@@ -253,47 +255,47 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
 .ci-name{font-size:13px;font-weight:700;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#fff}
 .ci-total{font-size:13px;font-weight:700;flex-shrink:0;color:#fff}
-.cart-foot{padding:14px 16px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.1)}
-.warn-text{font-size:13px;font-weight:700;color:var(--danger);
-  min-height:18px;margin-bottom:8px;text-align:center;line-height:1.3}
-.cart-total{font-size:26px;font-weight:800;text-align:center;margin-bottom:12px;color:#fff}
-.btn-checkout{width:100%;padding:14px;font-size:17px;border-radius:20px}
+.cart-foot{padding:10px 12px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.1)}
+.warn-text{font-size:12px;font-weight:700;color:var(--danger);
+  min-height:16px;margin-bottom:6px;text-align:center;line-height:1.3}
+.cart-total{font-size:20px;font-weight:800;text-align:center;margin-bottom:8px;color:#fff}
+.btn-checkout{width:100%;padding:11px;font-size:15px;border-radius:18px}
 
 /* ══ CONFIRM SCREEN ═════════════════════════════════ */
 #screen-confirm .inner{justify-content:center;align-items:center}
 .confirm-panel{
-  width:min(640px,92vw);
+  width:min(500px,92vw);
   background:rgba(255,255,255,.08);
   backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
-  border:1px solid rgba(255,255,255,.13);border-radius:28px;
-  padding:40px 46px;box-shadow:0 8px 56px rgba(0,0,0,.6);
-  display:flex;flex-direction:column;max-height:90vh;overflow-y:auto;scrollbar-width:none}
+  border:1px solid rgba(255,255,255,.13);border-radius:24px;
+  padding:24px 30px;box-shadow:0 8px 56px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;max-height:92vh;overflow-y:auto;scrollbar-width:none}
 .confirm-panel::-webkit-scrollbar{display:none}
-.confirm-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
-.confirm-title{font-size:34px;font-weight:900;color:#fff;letter-spacing:-.4px}
-.confirm-rows{display:flex;flex-direction:column;gap:12px;margin-bottom:20px;
-  max-height:44vh;overflow-y:auto;scrollbar-width:none}
+.confirm-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.confirm-title{font-size:24px;font-weight:900;color:#fff;letter-spacing:-.3px}
+.confirm-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;
+  max-height:34vh;overflow-y:auto;scrollbar-width:none}
 .confirm-rows::-webkit-scrollbar{display:none}
 /* 3-column pill: qty | name | price */
 .confirm-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;
-  gap:20px;padding:20px 26px;
+  gap:14px;padding:12px 18px;
   background:rgba(255,255,255,.10);
-  border:1.5px solid rgba(255,255,255,.18);border-radius:24px;
+  border:1.5px solid rgba(255,255,255,.18);border-radius:18px;
   box-shadow:0 3px 20px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.08);
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-.confirm-row-qty{font-size:24px;font-weight:900;
+.confirm-row-qty{font-size:18px;font-weight:900;
   color:rgba(140,200,255,.88);white-space:nowrap;
   text-shadow:0 0 16px rgba(100,170,255,.45)}
-.confirm-row-name{font-size:20px;font-weight:800;color:#fff;
+.confirm-row-name{font-size:15px;font-weight:800;color:#fff;
   line-height:1.25;word-break:break-word}
-.confirm-row-price{font-size:26px;font-weight:900;
+.confirm-row-price{font-size:18px;font-weight:900;
   color:rgba(140,200,255,.92);text-align:right;white-space:nowrap;
   text-shadow:0 0 18px rgba(100,170,255,.4)}
 .confirm-total-row{display:flex;justify-content:space-between;align-items:center;
-  padding:20px 0 24px;border-top:1.5px solid rgba(255,255,255,.15);
-  font-size:32px;font-weight:900;letter-spacing:-.5px}
+  padding:12px 0 16px;border-top:1.5px solid rgba(255,255,255,.15);
+  font-size:22px;font-weight:900;letter-spacing:-.4px}
 .confirm-total-row span:first-child{color:rgba(255,255,255,.65)}
-.btn-venmo{width:100%;padding:18px;font-size:18px;font-weight:800;border-radius:24px;
+.btn-venmo{width:100%;padding:13px;font-size:15px;font-weight:800;border-radius:20px;
   letter-spacing:.01em;
   background:linear-gradient(135deg,#008CFF,#0055CC);
   box-shadow:0 0 32px rgba(0,130,255,.45),0 6px 22px rgba(0,0,0,.4);
@@ -303,14 +305,14 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
 .btn-venmo:disabled{opacity:.5;cursor:default;transform:none}
 /* QR phase */
 #confirm-qr-phase{display:none;flex-direction:column;align-items:center;
-  gap:18px;text-align:center}
-.qr-wrap{background:#fff;border-radius:18px;padding:14px;
+  gap:12px;text-align:center}
+.qr-wrap{background:#fff;border-radius:14px;padding:10px;
   box-shadow:0 0 40px rgba(255,255,255,.15);display:inline-flex}
-.qr-wrap img{display:block;border-radius:6px}
-.confirm-amount-big{font-size:48px;font-weight:900;color:#fff;
-  letter-spacing:-2px;text-shadow:0 0 40px rgba(100,180,255,.4)}
-.confirm-qr-hint{font-size:14px;color:rgba(255,255,255,.55);max-width:300px;line-height:1.5}
-.btn-done{width:100%;padding:15px;font-size:17px;font-weight:800;border-radius:22px;
+.qr-wrap img{display:block;border-radius:5px}
+.confirm-amount-big{font-size:36px;font-weight:900;color:#fff;
+  letter-spacing:-1.5px;text-shadow:0 0 40px rgba(100,180,255,.4)}
+.confirm-qr-hint{font-size:12px;color:rgba(255,255,255,.55);max-width:260px;line-height:1.5}
+.btn-done{width:100%;padding:11px;font-size:15px;font-weight:800;border-radius:19px;
   background:linear-gradient(135deg,rgba(52,199,89,.9),rgba(36,155,66,.9));
   border:none;color:#fff;font-family:inherit;cursor:pointer;
   box-shadow:0 0 24px rgba(52,199,89,.35);transition:filter .14s,transform .1s}
@@ -319,39 +321,39 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
   color:rgba(255,255,255,.35);cursor:default;transform:none;filter:none}
 
 /* ══ SUGGESTION SCREEN ══════════════════════════════ */
-#screen-suggestion .inner{flex-direction:column;padding:22px 30px}
-.sug-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.sug-header h2{font-size:32px;font-weight:800;color:#fff;
+#screen-suggestion .inner{flex-direction:column;padding:16px 20px}
+.sug-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.sug-header h2{font-size:22px;font-weight:800;color:#fff;
   text-shadow:0 2px 20px rgba(0,0,0,.5)}
 .sug-body{flex:1;
   background:rgba(255,255,255,.08);
   backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
-  border:1px solid rgba(255,255,255,.13);border-radius:28px;
-  padding:22px;display:flex;flex-direction:column;
-  gap:12px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.4)}
-.prompt{font-size:19px;font-weight:700;color:#fff}
+  border:1px solid rgba(255,255,255,.13);border-radius:22px;
+  padding:14px;display:flex;flex-direction:column;
+  gap:8px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.prompt{font-size:15px;font-weight:700;color:#fff}
 .sug-input{background:rgba(255,255,255,.07);
-  border:1px solid rgba(255,255,255,.16);border-radius:16px;
-  padding:14px;font-size:18px;color:#fff;
-  resize:none;font-family:inherit;height:80px;outline:none;line-height:1.5}
+  border:1px solid rgba(255,255,255,.16);border-radius:14px;
+  padding:10px;font-size:15px;color:#fff;
+  resize:none;font-family:inherit;height:62px;outline:none;line-height:1.5}
 .sug-input::placeholder{color:rgba(255,255,255,.35)}
 .sug-input:focus{border-color:var(--accent)}
-.touch-kb{flex-shrink:0;display:flex;flex-direction:column;gap:5px;align-items:center}
-.key-row{display:flex;gap:4px}
-.key{height:40px;border-radius:12px;
+.touch-kb{flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:center}
+.key-row{display:flex;gap:3px}
+.key{height:34px;border-radius:10px;
   border:1px solid rgba(255,255,255,.14);
   background:rgba(255,255,255,.1);
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  font-size:15px;font-weight:700;width:50px;
+  font-size:13px;font-weight:700;width:43px;
   cursor:pointer;transition:background .09s,transform .07s;
   font-family:inherit;color:#fff}
 .key:active{background:rgba(255,255,255,.28);transform:scale(.93)}
-.key-wide{width:86px}
-.key-space{width:300px}
+.key-wide{width:74px}
+.key-space{width:252px}
 .key-shift-on{background:var(--accent)!important;color:#fff!important;
   border-color:var(--accent)!important;backdrop-filter:none!important}
 .sug-foot{display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
-.status{font-size:15px;font-weight:700;color:#fff}
+.status{font-size:13px;font-weight:700;color:#fff}
 .ok{color:var(--success)} .err{color:var(--danger)}
 
 /* ══ IDLE / SCREENSAVER ══════════════════════════════ */
@@ -369,7 +371,7 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
   background:rgba(255,255,255,.08);
   backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);
   border:1px solid rgba(255,255,255,.13);border-radius:40px;
-  padding:14px 30px;font-size:14px;font-weight:900;
+  padding:10px 22px;font-size:12px;font-weight:900;
   letter-spacing:.14em;text-transform:uppercase;
   color:rgba(255,255,255,.55);
   transition:background .45s,border-color .45s,box-shadow .45s,
@@ -393,12 +395,12 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
 #idle-center{position:absolute;z-index:2;pointer-events:none;
   display:flex;flex-direction:column;align-items:center;gap:10px;
   transform:translate(-50%,-50%)}
-#idle-tap{font-size:21px;font-weight:800;letter-spacing:.04em;
+#idle-tap{font-size:17px;font-weight:800;letter-spacing:.04em;
   color:rgba(255,255,255,.78);text-align:center;white-space:nowrap;
   text-shadow:0 0 32px rgba(140,200,255,.55),0 0 65px rgba(80,150,255,.28)}
-#idle-sub-wrap{height:24px;overflow:hidden;display:flex;
+#idle-sub-wrap{height:20px;overflow:hidden;display:flex;
   align-items:center;justify-content:center}
-#idle-phrase{font-size:12px;font-weight:900;letter-spacing:.3em;
+#idle-phrase{font-size:11px;font-weight:900;letter-spacing:.3em;
   text-transform:uppercase;color:rgba(110,175,255,.8);
   white-space:nowrap;display:block;
   text-shadow:0 0 14px rgba(100,170,255,.5);
@@ -549,7 +551,7 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
         <h2 class="confirm-title" style="margin-bottom:8px">Scan to Pay on Venmo</h2>
         <p class="confirm-qr-hint">Open your phone camera or Venmo app and scan the code below</p>
         <div class="qr-wrap">
-          <img id="qr-img" src="" width="210" height="210" alt="Venmo QR code">
+          <img id="qr-img" src="" width="160" height="160" alt="Venmo QR code">
         </div>
         <div class="confirm-amount-big" id="confirm-qr-amount">$0.00</div>
         <button class="btn-done" onclick="afterQR()">✓ Done — Back to Start</button>
@@ -587,6 +589,8 @@ const S = {
   cart: {},        // { name: { price, quantity, stock } }
   category: 'All',
   inventory: [],
+  categories: [],
+  announcements: [],
   busy: false,     // transition lock
 };
 
@@ -683,6 +687,7 @@ async function goCheckout() {
   disarmIdle();
   const [inv, cats] = await Promise.all([api('/api/inventory'), api('/api/categories')]);
   S.inventory = inv;
+  S.categories = cats;
   goTo('screen-checkout', 1, () => {
     S.category = 'All';
     renderCategories(cats);
@@ -691,12 +696,11 @@ async function goCheckout() {
   });
 }
 
-async function goStart() {
+function goStart() {
   if (S.busy) return;
-  const ann = await api('/api/announcements');
   goTo('screen-start', -1, () => {
     clearCart();
-    renderAnnouncements(ann);
+    renderAnnouncements(S.announcements);
     armIdle();
   });
 }
@@ -726,33 +730,80 @@ function renderAnnouncements(list) {
 // ── Item card helpers ──────────────────────────────────────────────────────
 function getItemEmoji(name, cat) {
   const n = name.toLowerCase();
-  if (/monster|celsius|bang|reign|energy/.test(n))       return '⚡';
-  if (/water|aqua|h2o/.test(n))                          return '💧';
-  if (/coffee|espresso|latte/.test(n))                   return '☕';
-  if (/tea|matcha/.test(n))                              return '🍵';
-  if (/juice|lemonade|smoothie/.test(n))                 return '🧃';
-  if (/soda|cola|pepsi|coke|sprite|dr pepper/.test(n))   return '🥤';
-  if (/ramen|noodle|pasta|pho|udon/.test(n))             return '🍜';
-  if (/pizza/.test(n))                                   return '🍕';
-  if (/burger|sandwich|sub|wrap/.test(n))                return '🥪';
-  if (/hot dog|corn dog/.test(n))                        return '🌭';
-  if (/chicken|wing/.test(n))                            return '🍗';
-  if (/ben.{0,4}jerry|pint|sundae/.test(n))             return '🍨';
-  if (/ice cream|popsicle|gelato/.test(n))               return '🍦';
-  if (/chocolate|nutella|hershey|kitkat|reese/.test(n))  return '🍫';
-  if (/gummy|haribo|bear/.test(n))                       return '🐻';
-  if (/skittles|starburst|jolly/.test(n))                return '🍬';
-  if (/m&m|mm|twix|snickers|mars/.test(n))               return '🍬';
-  if (/chip|doritos|takis|cheeto|frito|nacho/.test(n))   return '🌽';
-  if (/popcorn/.test(n))                                 return '🍿';
-  if (/pretzel|cracker/.test(n))                         return '🥨';
-  if (/quest|cliff|protein|bar|granola/.test(n))         return '💪';
-  if (/trail|nut|almond|cashew/.test(n))                 return '🥜';
-  if (/cookie|brownie/.test(n))                          return '🍪';
-  if (/fruit|apple|banana|orange/.test(n))               return '🍎';
-  // Category fallbacks
-  const cm = {Drinks:'🥤','Shelf Snacks':'🍿',Microwave:'🍜',
-               Frozen:'🍦',Candy:'🍬',Other:'🛒'};
+
+  // ── Specific branded / named items (most specific first) ────────────────
+  if (/uncrustable/.test(n))                                      return '🥪';
+  if (/hot.?pocket/.test(n))                                      return '🌯';
+  if (/oatmeal.?cream|cream.?pie/.test(n))                       return '🥧';
+  if (/honey.?bun/.test(n))                                       return '🍩';
+  if (/little.?bite|mini.?muffin/.test(n))                       return '🧁';
+  if (/muffin/.test(n))                                           return '🧁';
+  if (/swiss.?roll|ho.?ho|twinkie|ding.?dong|zebra.?cake/.test(n)) return '🎂';
+  if (/pop.?tart/.test(n))                                        return '🥞';
+  if (/rice.?krisp|rice.?crisp/.test(n))                         return '🍡';
+  if (/slim.?jim|beef.?jerky|jerky|beef.?stick/.test(n))         return '🥩';
+  if (/sunflower.?seed|pumpkin.?seed/.test(n))                    return '🌻';
+  if (/fruit.?roll|fruit.?snack|gusher/.test(n))                 return '🍇';
+  if (/swedish.?fish/.test(n))                                     return '🐟';
+  if (/sour.?patch/.test(n))                                       return '🍋';
+  if (/airhead/.test(n))                                           return '🍬';
+  if (/starburst/.test(n))                                         return '⭐';
+  if (/skittles/.test(n))                                          return '🌈';
+  if (/jolly.?rancher/.test(n))                                    return '🍬';
+  if (/lollipop|sucker/.test(n))                                   return '🍭';
+  if (/nerds|warhead/.test(n))                                     return '🍬';
+  if (/peach.?ring/.test(n))                                       return '🍑';
+  if (/reese|peanut.?butter.?cup/.test(n))                        return '🥜';
+  if (/m&m|m\.m/.test(n))                                         return '🍫';
+  if (/kit.?kat|hershey|twix|snickers|milky.?way|mars/.test(n))  return '🍫';
+  if (/oreo|nutter.?butter|chips.?ahoy/.test(n))                  return '🍪';
+  if (/nature.?valley|rxbar|larabar|kind.?bar|clif/.test(n))     return '💪';
+  if (/doritos|takis|cheeto|frito|tortilla.?chip/.test(n))       return '🌮';
+  if (/lays|pringles|ruffles/.test(n))                            return '🥔';
+  if (/red.?bull/.test(n))                                         return '🐂';
+  if (/gatorade|powerade|body.?armor|pedialyte/.test(n))          return '💦';
+  if (/fairlife|muscle.?milk|premier.?protein/.test(n))           return '🥛';
+  if (/macaroni|mac.?&?.?cheese|velveeta/.test(n))                return '🧀';
+  if (/soup|broth|chili/.test(n))                                 return '🍲';
+  if (/taco|burrito/.test(n))                                      return '🌮';
+  if (/ben.{0,4}jerry|haagen/.test(n))                            return '🍨';
+  if (/gummy|haribo|bear/.test(n))                                return '🐻';
+
+  // ── General patterns ─────────────────────────────────────────────────────
+  if (/monster|celsius|celcius|bang|reign|c4|prime|ghost|energy.?drink/.test(n)) return '⚡';
+  if (/water|aqua|h2o|sparkling.?ice/.test(n))                    return '💧';
+  if (/coffee|espresso|latte/.test(n))                            return '☕';
+  if (/tea|matcha/.test(n))                                       return '🍵';
+  if (/juice|lemonade|smoothie/.test(n))                          return '🧃';
+  if (/soda|cola|pepsi|coke|sprite|dr.?pepper|root.?beer|ginger.?ale|mountain.?dew|fanta/.test(n)) return '🥤';
+  if (/protein.?shake|protein.?drink/.test(n))                    return '🥛';
+  if (/ramen|noodle|cup.?nood|maruchan|nissin|pho|udon/.test(n)) return '🍜';
+  if (/pizza/.test(n))                                             return '🍕';
+  if (/burger|sandwich|sub|wrap/.test(n))                         return '🥪';
+  if (/hot.?dog|corn.?dog/.test(n))                               return '🌭';
+  if (/chicken|wing/.test(n))                                      return '🍗';
+  if (/ice.?cream|popsicle|gelato|pint|sundae/.test(n))          return '🍦';
+  if (/chocolate|nutella/.test(n))                                return '🍫';
+  if (/chip/.test(n))                                              return '🥔';
+  if (/popcorn/.test(n))                                           return '🍿';
+  if (/pretzel/.test(n))                                           return '🥨';
+  if (/granola|oat/.test(n))                                       return '🌾';
+  if (/protein.?bar|energy.?bar/.test(n))                         return '💪';
+  if (/quest/.test(n))                                             return '💪';
+  if (/trail.?mix|almond|cashew|nut/.test(n))                     return '🥜';
+  if (/cookie|brownie/.test(n))                                    return '🍪';
+  if (/candy|sweet/.test(n))                                       return '🍬';
+  if (/fruit|apple|banana|orange/.test(n))                        return '🍎';
+
+  // ── Category fallbacks ───────────────────────────────────────────────────
+  const cm = {
+    Drinks:         '🥤',
+    'Shelf Snacks': '🍿',
+    Microwave:      '🍲',
+    Frozen:         '🍦',
+    Candy:          '🍬',
+    Other:          '🛒',
+  };
   return cm[cat] || '🛒';
 }
 
@@ -840,13 +891,13 @@ function renderItems() {
         <span class="card-emoji">${emoji}</span>
         ${overlayHTML}
         ${lowBandHTML}
+        ${addBtnHTML}
       </div>
       <div class="card-body-inner">
         <div class="item-name">${esc(i.name)}</div>
         <div class="item-price">$${i.price.toFixed(2)}</div>
         <div class="card-footer-row">
           <span class="item-stock">${esc(stockTxt)}</span>
-          ${addBtnHTML}
         </div>
       </div>
     </div>`;
@@ -1419,18 +1470,40 @@ function initIdleSystem() {
   armIdle();
 }
 
+// ── Live kiosk poll ────────────────────────────────────────────────────────
+async function kioskPoll() {
+  try {
+    const d = await api('/api/kiosk_poll');
+    S.inventory     = d.inventory;
+    S.announcements = d.announcements;
+    S.categories    = d.categories;
+    const cur = document.querySelector('.screen.active')?.id;
+    if (cur === 'screen-checkout') {
+      renderCategories(d.categories);
+      renderItems();
+    } else if (cur === 'screen-start') {
+      renderAnnouncements(d.announcements);
+    }
+  } catch (_) { /* silent — will retry next cycle */ }
+  setTimeout(kioskPoll, 20000);
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 (async () => {
   initShader();
   initSubCycle();
   initIdleSystem();
   try {
-    const ann = await api('/api/announcements');
-    renderAnnouncements(ann);
+    const d = await api('/api/kiosk_poll');
+    S.inventory     = d.inventory;
+    S.announcements = d.announcements;
+    S.categories    = d.categories;
+    renderAnnouncements(d.announcements);
   } catch (_) {
     document.getElementById('news-list').innerHTML =
       '<div class="news-glass-item"><div class="news-glass-msg">Could not load announcements.</div></div>';
   }
+  setTimeout(kioskPoll, 20000);
 })();
 </script>
 </body>

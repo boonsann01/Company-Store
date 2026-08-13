@@ -14,11 +14,15 @@ A self-contained touchscreen point-of-sale kiosk for a military unit company sto
 - **Venmo QR checkout** — generates a real-time QR code pre-filled with the exact total and item breakdown (e.g. `2x White Monster, 3x Quest Bar`); "Done" button locks for 5 seconds then auto-returns to start after 1 minute of inactivity
 - **Suggestion box** — customers can submit product requests
 - **Shutter transition** — smooth venetian-blind animation between all screens
+- **Auto item icons** — every product card picks a matching emoji from its name (ramen, ice cream, energy drinks, snack cakes, jerky…) with per-category fallbacks — no image files to manage
+- **Scrolling menu** — the item grid scrolls when a category holds more products than fit on screen; cards always render at full size instead of compressing
+- **🔴 Live menu sync** — the kiosk polls every 20 seconds, so stock changes, new items, deletions, and new announcements pushed from the admin panel appear on their own — no refresh, no restart, no touching the kiosk
 
 ### Admin Panel (Browser-Based)
-- **📦 Inventory** — add, update, delete items and categories; post announcements to kiosk; update Venmo username anytime
+- **📦 Inventory** — add, update, delete items and categories; post announcements to kiosk; update Venmo username anytime. Each item records its own restock capacity the first time it is stocked
 - **💬 Suggestions** — view all customer-submitted feedback
 - **📊 Analytics** — revenue, expenses, net profit, margin, avg order value, top-selling items chart, revenue by category, 7-day sales bar chart, low-stock alerts, full expense log
+- **📉 Relative stock bars** — every stock bar is scaled to that item's *own* restock capacity, so a full shelf reads 100% green whether the item restocks at 8 units or 40. Low-stock alerts fire at 25% of capacity instead of a fixed count
 - **📈 Sales** — log restock dates and view exact units sold + revenue per restock cycle
 - **🔴 Live updates** — admin page polls every 8 seconds; a green toast notification appears for every new sale and all data updates in real time without a page refresh
 
@@ -65,6 +69,7 @@ Company-Store/
 ├── main.py                # Entry point — launches Flask + pywebview window
 ├── admin_server.py        # All Flask routes: kiosk API + full admin panel
 ├── database.py            # Every SQLite read/write function
+├── reset_analytics.py     # One-time script — wipes test sales/expenses before going live
 ├── requirements.txt       # Python dependencies
 ├── .gitignore
 └── templates/
@@ -82,12 +87,14 @@ Company-Store/
 |-----------|-------------|---------|
 | **Board** | Raspberry Pi 4 (4 GB RAM) | Raspberry Pi 4 (2 GB RAM) |
 | **OS** | Raspberry Pi OS Bookworm 64-bit | Raspberry Pi OS Bullseye 64-bit |
-| **Display** | 10–15" HDMI touchscreen (1280×800+) | Official Raspberry Pi 7" DSI touchscreen |
+| **Display** | Official Raspberry Pi 7" DSI touchscreen (1024×600) | Any 1024×600 HDMI touchscreen |
 | **Storage** | 32 GB microSD (Class 10 / A1) | 16 GB microSD |
 | **Power** | Official 5V 3A USB-C PSU | Any 5V 3A supply |
 | **Network** | Wi-Fi or Ethernet (for admin panel access from separate device) | Optional |
 
 > The kiosk runs fully offline once booted. Network is only needed so managers can reach the admin panel from a laptop or phone on the same Wi-Fi.
+
+> **Display resolution** — the entire kiosk UI is tuned for **1024×600**, the native resolution of the official Raspberry Pi 7" touchscreen. The pywebview window in `main.py` is fixed at that size. Larger panels still work (the layout is flex/grid based), but 1024×600 is what the type scale, card sizes, and spacing were designed against.
 
 ---
 
@@ -156,6 +163,16 @@ python3 main.py
 
 `store.db` is created automatically on first launch with sample inventory pre-loaded.
 
+### 5. Clear prototype data before going live
+
+After you finish testing and enter the real opening inventory, wipe every test sale and expense so prototype numbers never mix into real store analytics:
+
+```bash
+python3 reset_analytics.py
+```
+
+The script prints how many transactions, line items, and expenses it is about to delete and waits for you to type `YES` before touching anything. Inventory, categories, announcements, restock history, suggestions, and settings are all left untouched, and transaction IDs restart at 1.
+
 ---
 
 ## Raspberry Pi Deployment
@@ -170,6 +187,8 @@ to:
 ```python
 fullscreen=True,    # Pi production
 ```
+
+> The window is already sized to `1024×600` with `resizable=False`, matching the 7" panel exactly. Fullscreen simply removes the title bar so customers cannot close or move the window.
 
 ### Disable screen blanking / sleep
 
@@ -252,6 +271,22 @@ Find the Pi's IP with `hostname -I`
 
 ---
 
+## Upgrading an Existing Install
+
+Pull the latest code and restart — schema changes apply themselves:
+
+```bash
+cd ~/Company-Store
+git pull
+sudo systemctl restart kiosk.service
+```
+
+`database.init_db()` runs an idempotent migration on every launch. The `inventory` table gained a `max_stock` column that powers the relative stock bars; on the first run after upgrading, every existing item has `max_stock` backfilled to its current stock — so whatever is on the shelf at that moment becomes that item's 100% baseline. Restock to a higher number later and the baseline rises with it automatically.
+
+> Your `store.db` is **not** tracked by git, so `git pull` never overwrites live sales data.
+
+---
+
 ## Environment Variables
 
 | Variable | Default (dev only) | Description |
@@ -274,6 +309,8 @@ Find the Pi's IP with `hostname -I`
 
 The admin page updates **live every 8 seconds**. A green **🛒 New Sale** toast appears in the top-right corner on every checkout. A `● LIVE` indicator in the navbar turns red if the server is unreachable.
 
+The **kiosk** pulls the same data every **20 seconds** from `/api/kiosk_poll`. Anything you change in the admin panel — restocking an item, adding a product, deleting one, or posting an announcement — shows up on the kiosk screen within 20 seconds on its own. You never need to walk over and restart it.
+
 ---
 
 ## Troubleshooting
@@ -287,6 +324,8 @@ The admin page updates **live every 8 seconds**. A green **🛒 New Sale** toast
 | Kiosk doesn't auto-start on boot | Check `journalctl -u kiosk.service` — verify `DISPLAY=:0` and `XAUTHORITY` in the unit file |
 | `store.db` not found | Run `python3 main.py` once — `database.init_db()` creates it automatically |
 | Admin page stuck on old data after restart | Hard-refresh the browser (`Ctrl+Shift+R`) — session cookie may have expired |
+| Stock bar shows yellow/red at full capacity | That item's `max_stock` is lower than what is on the shelf. Update the item once in **Admin → Inventory** — `max_stock` rises to match the new stock and the bar reads 100% green |
+| Kiosk not showing a new item or announcement | Wait up to 20 s for the next poll. If it still doesn't appear, confirm the kiosk can reach `/api/kiosk_poll` and check `journalctl -u kiosk.service` |
 
 ---
 

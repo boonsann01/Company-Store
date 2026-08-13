@@ -309,19 +309,19 @@
                 </thead>
                 <tbody id="inv-tbody">
                   {% for item in inventory %}
-                  <tr {% if item[4] <= 5 %}class="table-warning"{% endif %}>
+                  <tr {% if item[5] and item[4] <= item[5] * 0.25 %}class="table-warning"{% endif %}>
                     <td class="fw-semibold">{{ item[1] }}</td>
                     <td><span class="badge bg-secondary">{{ item[2] }}</span></td>
                     <td>${{ "%.2f"|format(item[3]) }}</td>
                     <td>
                       <div class="d-flex align-items-center gap-2">
-                        <span class="badge" style="background:{{ stock_color(item[4]) }};
-                          color:{{ stock_text_color(item[4]) }};min-width:36px;">
+                        <span class="badge" style="background:{{ stock_color(item[4], item[5]) }};
+                          color:{{ stock_text_color(item[4], item[5]) }};min-width:36px;">
                           {{ item[4] }}
                         </span>
                         <div class="stock-bar flex-grow-1">
-                          <div style="width:{{ stock_percent(item[4]) }}%;height:100%;
-                            background:{{ stock_color(item[4]) }};border-radius:4px;"></div>
+                          <div style="width:{{ stock_percent(item[4], item[5]) }}%;height:100%;
+                            background:{{ stock_color(item[4], item[5]) }};border-radius:4px;"></div>
                         </div>
                       </div>
                     </td>
@@ -902,9 +902,9 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 function fmt2(n) { return Number(n).toFixed(2); }
-function stockPct(s)   { return Math.max(0, Math.min(100, Math.round(s / 50 * 100))); }
-function stockClr(s)   { return `hsl(${Math.round(Math.max(0,Math.min(1,s/50))*120)},75%,45%)`; }
-function stockTxt(s)   { return s >= 18 ? '#111' : '#fff'; }
+function stockPct(s, m) { if (!m) return 100; return Math.max(0, Math.min(100, Math.round(s / m * 100))); }
+function stockClr(s, m) { const r = m ? Math.max(0, Math.min(1, s / m)) : 1; return `hsl(${Math.round(r*120)},75%,45%)`; }
+function stockTxt(s, m) { return (m ? s / m : 1) >= 0.36 ? '#111' : '#fff'; }
 
 // ── Toast notification ────────────────────────────────────────────────────────
 function showSaleToast(tx) {
@@ -948,25 +948,25 @@ function updateInventoryTable(items) {
   const tb = document.getElementById('inv-tbody');
   if (!tb) return;
   tb.innerHTML = items.map(i => `
-    <tr${i.stock <= 5 ? ' class="table-warning"' : ''}>
+    <tr${(i.max_stock && i.stock <= i.max_stock * 0.25) ? ' class="table-warning"' : ''}>
       <td class="fw-semibold">${esc(i.name)}</td>
       <td><span class="badge bg-secondary">${esc(i.category)}</span></td>
       <td>$${fmt2(i.price)}</td>
       <td>
         <div class="d-flex align-items-center gap-2">
           <span class="badge"
-            style="background:${stockClr(i.stock)};color:${stockTxt(i.stock)};min-width:36px;">
+            style="background:${stockClr(i.stock,i.max_stock)};color:${stockTxt(i.stock,i.max_stock)};min-width:36px;">
             ${i.stock}
           </span>
           <div class="stock-bar flex-grow-1">
-            <div style="width:${stockPct(i.stock)}%;height:100%;
-              background:${stockClr(i.stock)};border-radius:4px;"></div>
+            <div style="width:${stockPct(i.stock,i.max_stock)}%;height:100%;
+              background:${stockClr(i.stock,i.max_stock)};border-radius:4px;"></div>
           </div>
         </div>
       </td>
     </tr>`).join('');
   // Keep auto-fill data in sync
-  window.invData = items.map(i => [i.id, i.name, i.category, i.price, i.stock]);
+  window.invData = items.map(i => [i.id, i.name, i.category, i.price, i.stock, i.max_stock]);
   // Refresh datalist
   const dl = document.getElementById('inv-list');
   if (dl) dl.innerHTML = items.map(i => `<option value="${esc(i.name)}">`).join('');
@@ -1049,7 +1049,7 @@ function updateLowStock(items) {
     ? `<ul class="list-group list-group-flush">${items.map(i => `
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <span class="fw-semibold">${esc(i.name)}</span>
-          <span class="badge bg-danger rounded-pill">${i.stock} left</span>
+          <span class="badge bg-danger rounded-pill">${i.stock}${i.max_stock ? '/'+i.max_stock : ''} left</span>
         </li>`).join('')}</ul>`
     : `<div class="text-center text-muted py-4">
         <div style="font-size:2rem">✅</div>

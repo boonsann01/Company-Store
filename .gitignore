@@ -3,6 +3,8 @@ venv/
 
 # Database (contains real transaction data — never commit)
 store.db
+store.db.bak
+*.db-journal
 
 # Python cache
 __pycache__/
@@ -12,6 +14,10 @@ __pycache__/
 # Environment files (contains passwords/secrets)
 .env
 *.env
+
+# Local dev scratch — not part of the deployed kiosk
+ARCHIVE/
+.claude/
 
 # OS junk
 .DS_Store
