@@ -177,6 +177,79 @@ The script prints how many transactions, line items, and expenses it is about to
 
 ## Raspberry Pi Deployment
 
+### Full deployment from GitHub (fresh Pi)
+
+Start-to-finish on a clean Raspberry Pi OS Bookworm install. Run everything in a terminal on the Pi, or over SSH.
+
+**1 — Install system packages**
+
+pywebview needs GTK + WebKit2GTK. These must go in **before** `pip install`:
+
+```bash
+sudo apt update && sudo apt install -y git python3-pip python3-venv python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1 libwebkit2gtk-4.1-dev libgtk-3-dev libgirepository1.0-dev pkg-config at-spi2-core
+```
+
+**2 — Clone the repository**
+
+```bash
+cd ~ && git clone https://github.com/boonsann01/Company-Store.git && cd Company-Store
+```
+
+**3 — Install Python dependencies**
+
+```bash
+pip install -r requirements.txt --break-system-packages
+```
+
+**4 — Generate a session secret**
+
+```bash
+python3 -c 'import secrets; print(secrets.token_hex(32))'
+```
+
+Copy the output — it becomes `STORE_ADMIN_SECRET_KEY` in step 7.
+
+> ### ⚠️ Both secrets are mandatory before this touches a network
+>
+> `STORE_ADMIN_PASSWORD` **and** `STORE_ADMIN_SECRET_KEY` must both be set in the systemd unit. The in-code fallbacks for both are public in this repository.
+>
+> The secret key is the one people underestimate: Flask session cookies are **signed, not encrypted**. If the key is left at its default, anyone on the same Wi-Fi can forge a cookie marking themselves logged in and skip the login form entirely — a strong password does not help. Set both, or the admin panel is effectively open.
+
+**5 — Enable fullscreen**
+
+Set `fullscreen=True` in `main.py` — see [Enable fullscreen](#enable-fullscreen) below.
+
+**6 — First run, and getting your inventory onto the Pi**
+
+```bash
+python3 main.py
+```
+
+This creates `store.db` with sample inventory. `store.db` is deliberately **not** tracked by git, so your real stock does not arrive with the clone. Two options:
+
+- **Re-enter it** through the admin panel once the Pi is on the network, or
+- **Copy your existing database over** — from PowerShell on the Windows machine that has it:
+
+```powershell
+scp "C:\Users\nathan.boonsanguan\Documents\company_store_kiosk_copy\store.db" pi@raspberrypi.local:~/Company-Store/store.db
+```
+
+Stop the kiosk before overwriting `store.db`, and remember `python3 reset_analytics.py` if that database still holds prototype sales.
+
+**7 — Install the systemd service**
+
+Follow [Autostart with systemd](#autostart-with-systemd) below, filling in the password and the secret key from step 4.
+
+**8 — Verify**
+
+```bash
+sudo systemctl status kiosk.service
+```
+
+The kiosk should be up fullscreen on the touchscreen. Confirm remote access from a laptop using the section below, then reboot once to prove it comes back on its own.
+
+> **Note on future `git pull`s** — step 5 edits `main.py`, which git tracks. If a later pull complains about local changes, run `git stash && git pull && git stash pop`.
+
 ### Enable fullscreen
 
 In `main.py`, change:
@@ -259,15 +332,51 @@ View logs:
 journalctl -u kiosk.service -f
 ```
 
-### Accessing the admin panel
+### Accessing the admin panel from a Windows laptop
 
-While the kiosk is running, open any browser on the same network and go to:
+The Flask server binds to `0.0.0.0:5000`, so it accepts connections from any device on the same network. The kiosk window itself still loads over `127.0.0.1`, so this changes nothing about how the kiosk behaves.
+
+**1 — Find the Pi's address.** On the Pi:
+
+```bash
+hostname -I
+```
+
+**2 — Open it in any browser on the laptop.** Both machines must be on the same Wi-Fi:
 
 ```
-http://<pi-ip-address>:5000/
+http://192.168.1.42:5000
 ```
 
-Find the Pi's IP with `hostname -I`
+Substitute the address from step 1. You'll land on the login page — sign in with the `STORE_ADMIN_USERNAME` / `STORE_ADMIN_PASSWORD` set in the systemd unit.
+
+**3 — Use the hostname instead (recommended).** Windows 10 and 11 resolve mDNS natively, and Raspberry Pi OS advertises itself over Avahi:
+
+```
+http://raspberrypi.local:5000
+```
+
+This keeps working when the Pi's IP changes on a new DHCP lease. Substitute your Pi's hostname if you renamed it during imaging.
+
+**4 — Pin the address (optional).** For a permanent kiosk, add a DHCP reservation in the router so the Pi always receives the same IP, then bookmark it on each laptop.
+
+#### Multiple managers
+
+Several people can be signed in at once. Each browser holds its own independent session cookie, so logging in on one laptop never signs anyone else out — they all use the same credentials.
+
+Three managers with the dashboard open, plus the kiosk, is roughly **0.5 requests/second**, which is negligible for a Pi 4. Every dashboard refreshes on its own every 8 seconds, so managers see each other's changes almost immediately.
+
+> One caveat: inventory updates are **last-write-wins**. If two managers edit the same item within a few seconds of each other, the second save silently overwrites the first with no warning. The 8-second refresh makes this unlikely, but the app will not stop it.
+
+#### If the laptop can't connect
+
+| Symptom | Cause and fix |
+|---------|---------------|
+| `ping raspberrypi.local` fails, but the Pi has internet | **Client isolation** — many institutional, enterprise, and guest networks block device-to-device traffic. No code change fixes this. Use a phone hotspot, a dedicated travel router, or a direct Ethernet cable between laptop and Pi |
+| Connection times out | Confirm both devices are on the *same* SSID (not one on a `-Guest` or 5 GHz-only network), and that the service is up: `sudo systemctl status kiosk.service` |
+| Connection refused | The service isn't running, or an older build is deployed that still binds `127.0.0.1`. Check `git log --oneline -1` on the Pi and pull if it predates the `0.0.0.0` change |
+| Works by IP, not by `.local` | mDNS is blocked or Avahi isn't running: `sudo systemctl status avahi-daemon`. Fall back to the IP with a DHCP reservation |
+| Reachable but login fails | `STORE_ADMIN_USERNAME` / `STORE_ADMIN_PASSWORD` in the systemd unit differ from what you're typing. `sudo systemctl show kiosk.service -p Environment` prints what the service actually loaded |
 
 ---
 
@@ -292,8 +401,8 @@ sudo systemctl restart kiosk.service
 | Variable | Default (dev only) | Description |
 |----------|--------------------|-------------|
 | `STORE_ADMIN_USERNAME` | `b1_admin` | Admin panel login username |
-| `STORE_ADMIN_PASSWORD` | — | Admin panel login password — **set before fielding** |
-| `STORE_ADMIN_SECRET_KEY` | `change-this-before-fielding` | Flask session secret — generate with `secrets.token_hex(32)` |
+| `STORE_ADMIN_PASSWORD` | *(a working password is hardcoded in `admin_server.py` and is public in this repo)* | Admin panel login password — **must be overridden before fielding** |
+| `STORE_ADMIN_SECRET_KEY` | `change-this-before-fielding` | Flask session secret — generate with `secrets.token_hex(32)`. **Must be overridden**: cookies are signed with this, so a known key lets anyone forge a logged-in session |
 | `VENMO_USERNAME` | `YourVenmoHere` | Venmo handle used in checkout QR codes — can also be updated live via **Admin → Inventory → Venmo Checkout Settings** |
 
 ---
@@ -331,8 +440,10 @@ The **kiosk** pulls the same data every **20 seconds** from `/api/kiosk_poll`. A
 
 ## Security Notes
 
-- Set all three environment variables (`USERNAME`, `PASSWORD`, `SECRET_KEY`) **before** fielding on the Pi — the defaults are intentionally weak placeholders
-- Use a strong, unique admin password — the panel is reachable by anyone on the same Wi-Fi
+- Set all three environment variables (`USERNAME`, `PASSWORD`, `SECRET_KEY`) **before** fielding on the Pi. These are not placeholders — `admin_server.py` ships a real, working admin password and a fixed session key, both readable by anyone who opens this repository
+- **`STORE_ADMIN_SECRET_KEY` matters more than the password.** Flask signs session cookies with it rather than encrypting them. Leave it at the default and an attacker on the same Wi-Fi can mint a cookie that says they're logged in, never touching the login form. Overriding the password alone does not close this
+- Use a strong, unique admin password — port 5000 is reachable by anyone on the same Wi-Fi
+- Treat any credential previously committed to this repo as compromised — rotate it rather than reusing it elsewhere
 - Back up `store.db` regularly once the store goes live: `cp store.db store.db.bak`
 - The kiosk window has no browser chrome or address bar — customers cannot navigate away from the kiosk
 

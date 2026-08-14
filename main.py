@@ -10,7 +10,10 @@ import database
 from admin_server import app
 
 def start_flask():
-    app.run(host='127.0.0.1', port=5000, debug=False,
+    # 0.0.0.0 so managers can reach the admin panel from a laptop/phone on the
+    # same network. The kiosk window itself still loads via 127.0.0.1 below.
+    # Set STORE_ADMIN_PASSWORD before fielding — this port is open to the LAN.
+    app.run(host='0.0.0.0', port=5000, debug=False,
             use_reloader=False, threaded=True)
 
 if __name__ == '__main__':
