@@ -31,7 +31,9 @@ if __name__ == '__main__':
         resizable=False,
         min_size=(1024, 600),
         background_color='#04060F',
-        # Set fullscreen=True when deploying on the Pi
-        fullscreen=False,
+        # Ships fullscreen so a fresh clone is deployment-ready and the Pi
+        # never carries local edits to a tracked file. Set False temporarily
+        # to run windowed while developing on a desktop.
+        fullscreen=True,
     )
     webview.start(debug=False)

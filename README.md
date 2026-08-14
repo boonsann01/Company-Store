@@ -215,9 +215,9 @@ Copy the output — it becomes `STORE_ADMIN_SECRET_KEY` in step 7.
 >
 > The secret key is the one people underestimate: Flask session cookies are **signed, not encrypted**. If the key is left at its default, anyone on the same Wi-Fi can forge a cookie marking themselves logged in and skip the login form entirely — a strong password does not help. Set both, or the admin panel is effectively open.
 
-**5 — Enable fullscreen**
+**5 — Confirm fullscreen (nothing to change)**
 
-Set `fullscreen=True` in `main.py` — see [Enable fullscreen](#enable-fullscreen) below.
+`main.py` already ships `fullscreen=True`, so the clone is deployment-ready as-is. See [Fullscreen](#fullscreen) if you ever need to run windowed while developing.
 
 **6 — First run, and getting your inventory onto the Pi**
 
@@ -248,20 +248,17 @@ sudo systemctl status kiosk.service
 
 The kiosk should be up fullscreen on the touchscreen. Confirm remote access from a laptop using the section below, then reboot once to prove it comes back on its own.
 
-> **Note on future `git pull`s** — step 5 edits `main.py`, which git tracks. If a later pull complains about local changes, run `git stash && git pull && git stash pop`.
+### Fullscreen
 
-### Enable fullscreen
+`main.py` ships with `fullscreen=True`, so a fresh clone is deployment-ready with no edits. This also keeps the Pi free of local modifications to tracked files, which means `git pull` stays conflict-free on every future update.
 
-In `main.py`, change:
-```python
-fullscreen=False,   # development
+> The window is sized to `1024×600` with `resizable=False`, matching the 7" panel exactly. Fullscreen additionally removes the title bar, so customers cannot close, move, or navigate away from the kiosk.
+
+To run windowed while developing on a desktop, temporarily set `fullscreen=False` in `main.py`. Revert before committing — or discard the change with:
+
+```bash
+git checkout -- main.py
 ```
-to:
-```python
-fullscreen=True,    # Pi production
-```
-
-> The window is already sized to `1024×600` with `resizable=False`, matching the 7" panel exactly. Fullscreen simply removes the title bar so customers cannot close or move the window.
 
 ### Disable screen blanking / sleep
 
