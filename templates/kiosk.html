@@ -86,7 +86,7 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
   box-shadow:0 0 28px rgba(0,122,255,.35),0 4px 16px rgba(0,0,0,.4)}
 .hero-hint{font-size:12px;color:rgba(255,255,255,.25);margin-top:-4px}
 
-/* ── Bottom bar (news + feedback) ── */
+/* ── Bottom bar (news) ── */
 .hero-bottom{position:relative;z-index:2;display:flex;
   align-items:flex-end;justify-content:space-between;
   padding:0 20px 14px;width:100%;flex-shrink:0;gap:16px}
@@ -103,15 +103,6 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
 .news-glass-date{font-size:10px;font-weight:700;letter-spacing:.06em;
   color:rgba(100,170,255,.8);margin-bottom:4px;font-variant-numeric:tabular-nums}
 .news-glass-msg{font-size:13px;color:rgba(255,255,255,.72);line-height:1.45;font-weight:500}
-
-/* Frosted glass feedback button */
-.feedback-ghost{background:rgba(255,255,255,.08);
-  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  border:1px solid rgba(255,255,255,.16);border-radius:22px;
-  color:rgba(255,255,255,.72);font-size:13px;font-weight:700;
-  padding:11px 20px;cursor:pointer;white-space:nowrap;
-  transition:background .15s,color .15s;font-family:inherit;flex-shrink:0}
-.feedback-ghost:active{background:rgba(255,255,255,.18);color:#fff}
 
 /* ══ CHECKOUT SCREEN ════════════════════════════════ */
 #screen-checkout .inner{/* filled by .screen .inner */}
@@ -320,42 +311,6 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
 .btn-done:disabled{background:rgba(255,255,255,.12);box-shadow:none;
   color:rgba(255,255,255,.35);cursor:default;transform:none;filter:none}
 
-/* ══ SUGGESTION SCREEN ══════════════════════════════ */
-#screen-suggestion .inner{flex-direction:column;padding:16px 20px}
-.sug-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.sug-header h2{font-size:22px;font-weight:800;color:#fff;
-  text-shadow:0 2px 20px rgba(0,0,0,.5)}
-.sug-body{flex:1;
-  background:rgba(255,255,255,.08);
-  backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
-  border:1px solid rgba(255,255,255,.13);border-radius:22px;
-  padding:14px;display:flex;flex-direction:column;
-  gap:8px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.4)}
-.prompt{font-size:15px;font-weight:700;color:#fff}
-.sug-input{background:rgba(255,255,255,.07);
-  border:1px solid rgba(255,255,255,.16);border-radius:14px;
-  padding:10px;font-size:15px;color:#fff;
-  resize:none;font-family:inherit;height:62px;outline:none;line-height:1.5}
-.sug-input::placeholder{color:rgba(255,255,255,.35)}
-.sug-input:focus{border-color:var(--accent)}
-.touch-kb{flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:center}
-.key-row{display:flex;gap:3px}
-.key{height:34px;border-radius:10px;
-  border:1px solid rgba(255,255,255,.14);
-  background:rgba(255,255,255,.1);
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  font-size:13px;font-weight:700;width:43px;
-  cursor:pointer;transition:background .09s,transform .07s;
-  font-family:inherit;color:#fff}
-.key:active{background:rgba(255,255,255,.28);transform:scale(.93)}
-.key-wide{width:74px}
-.key-space{width:252px}
-.key-shift-on{background:var(--accent)!important;color:#fff!important;
-  border-color:var(--accent)!important;backdrop-filter:none!important}
-.sug-foot{display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
-.status{font-size:13px;font-weight:700;color:#fff}
-.ok{color:var(--success)} .err{color:var(--danger)}
-
 /* ══ IDLE / SCREENSAVER ══════════════════════════════ */
 #screen-idle{position:fixed;inset:0;z-index:10;display:none;
   background:#04060F;cursor:pointer}
@@ -487,7 +442,6 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
         </div>
       </div>
     </div>
-    <button class="feedback-ghost" onclick="goSuggestion()">Suggestions &amp; Feedback →</button>
   </div>
 </div>
 
@@ -557,28 +511,6 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
         <button class="btn-done" onclick="afterQR()">✓ Done — Back to Start</button>
       </div>
 
-    </div>
-  </div>
-</div>
-
-<!-- ══ SUGGESTION SCREEN ══ -->
-<div id="screen-suggestion" class="screen">
-  <div class="inner">
-    <div class="sug-header">
-      <h2>Suggestions &amp; Feedback</h2>
-      <button class="btn-ghost" onclick="goStart()">Back</button>
-    </div>
-    <div class="sug-body">
-      <p class="prompt">What should we stock, change, or improve?</p>
-      <textarea id="sug-text" class="sug-input"
-        placeholder="Type your feedback here…" readonly></textarea>
-      <div id="touch-kb" class="touch-kb"></div>
-      <div class="sug-foot">
-        <span id="sug-status" class="status"></span>
-        <button class="btn-primary"
-          style="font-size:17px;padding:12px 38px;border-radius:22px"
-          onclick="submitSuggestion()">Submit</button>
-      </div>
     </div>
   </div>
 </div>
@@ -710,16 +642,6 @@ function goStart() {
     clearCart();
     renderAnnouncements(S.announcements);
     armIdle();
-  });
-}
-
-function goSuggestion() {
-  if (S.busy) return;
-  disarmIdle();
-  goTo('screen-suggestion', 1, () => {
-    document.getElementById('sug-text').value = '';
-    setStatus('', '');
-    buildKeyboard();
   });
 }
 
@@ -1114,72 +1036,6 @@ function disarmQRIdle() {
   if (_qrCountdown) { clearInterval(_qrCountdown); _qrCountdown = null; }
 }
 
-// ── Suggestion keyboard ────────────────────────────────────────────────────
-let kbShift = false;
-
-function buildKeyboard() {
-  const rows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm,.?'];
-  const kb = document.getElementById('touch-kb');
-  kb.innerHTML = '';
-  rows.forEach(row => {
-    const r = document.createElement('div');
-    r.className = 'key-row';
-    [...row].forEach(ch => {
-      const k = document.createElement('button');
-      k.className = 'key';
-      k.textContent = kbShift ? ch.toUpperCase() : ch;
-      k.onclick = () => pressKey(ch);
-      r.appendChild(k);
-    });
-    kb.appendChild(r);
-  });
-  const cr = document.createElement('div');
-  cr.className = 'key-row';
-  const mk = (txt, cls, fn) => {
-    const k = document.createElement('button');
-    k.className = cls; k.textContent = txt; k.onclick = fn;
-    return k;
-  };
-  cr.appendChild(mk('Shift', 'key key-wide' + (kbShift ? ' key-shift-on' : ''),
-    () => { kbShift = !kbShift; buildKeyboard(); }));
-  cr.appendChild(mk('Space', 'key key-space', () => pressKey(' ')));
-  cr.appendChild(mk('Enter', 'key key-wide',  () => pressKey('\n')));
-  cr.appendChild(mk('⌫',    'key key-wide',  pressBack));
-  kb.appendChild(cr);
-}
-
-function pressKey(ch) {
-  const ta = document.getElementById('sug-text');
-  if (kbShift && ch.match(/^[a-z]$/)) { ch = ch.toUpperCase(); kbShift = false; buildKeyboard(); }
-  ta.value += ch;
-}
-function pressBack() {
-  const ta = document.getElementById('sug-text');
-  ta.value = ta.value.slice(0, -1);
-}
-
-async function submitSuggestion() {
-  const msg = document.getElementById('sug-text').value.trim();
-  if (!msg) { setStatus('Please type something first.', 'err'); return; }
-  try {
-    await api('/api/suggestion', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg })
-    });
-    setStatus('Submitted. Thank you!', 'ok');
-    setTimeout(goStart, 1200);
-  } catch (e) {
-    setStatus(e.message || 'Error submitting.', 'err');
-  }
-}
-
-function setStatus(txt, cls) {
-  const el = document.getElementById('sug-status');
-  el.textContent = txt;
-  el.className = 'status ' + cls;
-}
-
 // ── Utility ────────────────────────────────────────────────────────────────
 function esc(s) {
   return String(s)
@@ -1291,7 +1147,7 @@ function disarmIdle() {
 }
 
 function showIdle() {
-  // Only trigger from the start screen — never interrupt checkout, confirm, or suggestion
+  // Only trigger from the start screen — never interrupt checkout or confirm
   if (!document.getElementById('screen-start').classList.contains('active')) return;
   // Reset phrase to first item before showing
   const ph = document.getElementById('idle-phrase');
