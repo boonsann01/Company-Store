@@ -185,27 +185,57 @@ def delete_inventory_item(name):
     cursor.execute('DELETE FROM inventory WHERE name = ?', (name,))
     conn.commit(); conn.close()
 
-def log_transaction(cart_dict, total_amount):
+def log_transaction(cart_dict, total_amount=None):
+    """Record a sale and deduct stock. Returns the authoritative total.
+
+    Prices and the order total come from the database, never from the client.
+    The kiosk posts whatever total it computed, and every analytics figure
+    (revenue, profit, margin, average order) derives from that number — so a
+    tampered or stale client could book a $3.00 sale as $0.01.
+
+    total_amount, when supplied, is treated as a claim to be checked rather
+    than a value to store: a mismatch means the kiosk's prices went stale
+    mid-order, and the sale is rejected so the customer can re-review instead
+    of being shown a Venmo QR for a different amount than the store records.
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
+        priced = []
         for name, details in cart_dict.items():
-            qty = details['quantity']
-            cursor.execute('SELECT stock FROM inventory WHERE name = ?', (name,))
+            try:
+                qty = int(details['quantity'])
+            except (TypeError, ValueError, KeyError):
+                raise ValueError(f'Invalid quantity for {name}.')
+            cursor.execute('SELECT stock, price FROM inventory WHERE name = ?', (name,))
             row = cursor.fetchone()
             if row is None:
                 raise ValueError(f'{name} is no longer in inventory.')
-            if qty < 1 or qty > row[0]:
-                raise ValueError(f'Only {row[0]} {name} in stock.')
+            stock, price = row
+            if qty < 1 or qty > stock:
+                raise ValueError(f'Only {stock} {name} in stock.')
+            priced.append((name, qty, price))
+
+        server_total = round(sum(qty * price for _, qty, price in priced), 2)
+
+        if total_amount is not None:
+            try:
+                claimed = round(float(total_amount), 2)
+            except (TypeError, ValueError):
+                raise ValueError('Invalid order total.')
+            if abs(claimed - server_total) > 0.005:
+                raise ValueError('Prices changed — please review your order.')
 
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute('INSERT INTO transactions (timestamp, total) VALUES (?, ?)', (timestamp, total_amount))
+        cursor.execute('INSERT INTO transactions (timestamp, total) VALUES (?, ?)',
+                       (timestamp, server_total))
         transaction_id = cursor.lastrowid
-        for name, details in cart_dict.items():
-            qty = details['quantity']; price = details['price']
-            cursor.execute('INSERT INTO transaction_items (transaction_id, item_name, quantity, price) VALUES (?, ?, ?, ?)', (transaction_id, name, qty, price))
+        for name, qty, price in priced:
+            cursor.execute('INSERT INTO transaction_items (transaction_id, item_name, quantity, price) VALUES (?, ?, ?, ?)',
+                           (transaction_id, name, qty, price))
             cursor.execute('UPDATE inventory SET stock = stock - ? WHERE name = ?', (qty, name))
         conn.commit()
+        return server_total
     except:
         conn.rollback()
         raise

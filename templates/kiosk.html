@@ -597,7 +597,15 @@ const S = {
 // ── API ────────────────────────────────────────────────────────────────────
 async function api(path, opts) {
   const r = await fetch(path, opts);
-  if (!r.ok) { const e = await r.json(); throw new Error(e.error || r.statusText); }
+  if (!r.ok) {
+    let msg = r.statusText;
+    try { msg = (await r.json()).error || msg; } catch (_) {}
+    const err = new Error(msg);
+    // Callers that move money need to tell "the server refused, nothing
+    // happened" (4xx — safe to retry) from "unknown outcome" (5xx / network).
+    err.status = r.status;
+    throw err;
+  }
   return r.json();
 }
 
@@ -969,22 +977,6 @@ function hideCancelMenu() {
   document.getElementById('cancel-menu').classList.add('hidden');
 }
 
-async function processCheckout() {
-  if (!Object.keys(S.cart).length) return;
-  const total = Object.values(S.cart).reduce((s, i) => s + i.price * i.quantity, 0);
-  try {
-    await api('/api/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cart: S.cart, total })
-    });
-    S.busy = false; // clear any stuck transition lock so goStart() isn't silently blocked
-    goStart();
-  } catch (e) {
-    setWarn(e.message || 'Checkout failed. Try again.');
-  }
-}
-
 // ── Confirm / Venmo QR screen ─────────────────────────────────────────────
 function goConfirm() {
   if (S.busy) return;
@@ -1033,33 +1025,54 @@ async function doVenmoCheckout() {
   btn.disabled = true;
   btn.textContent = 'Processing…';
   document.getElementById('confirm-warn').textContent = '';
+  // Build item list for Venmo note e.g. "2x Quest Bar, 1x White Monster"
+  const note = Object.entries(S.cart)
+    .map(([name, { quantity }]) => `${quantity}x ${name}`)
+    .join(', ');
+
+  // Tracks how far we got, so the error path knows whether money moved.
+  let stage = 'qr';
+
   try {
-    // Log transaction
+    // Fetch the QR BEFORE committing the sale. Ordering matters: logging the
+    // transaction first meant a QR failure left a committed sale sitting in a
+    // still-loaded cart, and the customer's retry charged them a second time.
+    // Nothing here has a side effect, so a failure is always safe to retry.
+    const qrData = await api(
+      `/api/venmo_qr?amount=${total.toFixed(2)}&note=${encodeURIComponent(note)}`
+    );
+
+    // Commit the sale. The cart is emptied the instant this returns, so no
+    // later failure can leave a chargeable cart on screen.
+    stage = 'checkout';
     await api('/api/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cart: S.cart, total })
     });
-    // Build item list for Venmo note e.g. "2x Quest Bar, 1x White Monster"
-    const note = Object.entries(S.cart)
-      .map(([name, { quantity }]) => `${quantity}x ${name}`)
-      .join(', ');
-    // Fetch server-generated QR code (uses VENMO_USERNAME env var)
-    const qrData = await api(
-      `/api/venmo_qr?amount=${total.toFixed(2)}&note=${encodeURIComponent(note)}`
-    );
+    clearCart();
+
     // Show QR phase
     document.getElementById('qr-img').src = qrData.qr;
     document.getElementById('confirm-qr-amount').textContent = `$${total.toFixed(2)}`;
     document.getElementById('confirm-summary-phase').style.display = 'none';
     const qrPhase = document.getElementById('confirm-qr-phase');
     qrPhase.style.display = 'flex';
-    clearCart();
     startQRPhase();
   } catch (e) {
-    btn.disabled = false;
-    btn.textContent = 'Generate Venmo QR & Checkout';
-    document.getElementById('confirm-warn').textContent = e.message || 'Checkout failed. Try again.';
+    const warn = document.getElementById('confirm-warn');
+    // Safe to retry when the sale definitely did not happen: either we never
+    // reached the checkout call, or the server explicitly refused it (out of
+    // stock, stale prices). A 5xx or network drop on checkout itself is the
+    // one ambiguous case — never hand back a button that could charge twice.
+    const nothingCharged = stage === 'qr' || (e.status >= 400 && e.status < 500);
+    if (nothingCharged) {
+      btn.disabled = false;
+      btn.textContent = 'Generate Venmo QR & Checkout';
+      warn.textContent = e.message || 'Checkout failed. Try again.';
+    } else {
+      warn.textContent = 'Could not confirm your order — please see a manager. Do not retry.';
+    }
   }
 }
 

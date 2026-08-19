@@ -482,8 +482,10 @@ def api_checkout():
     cart  = data.get('cart', {})
     total = data.get('total', 0)
     try:
-        database.log_transaction(cart, total)
-        return jsonify({'success': True})
+        # The stored total is recomputed server-side; echo it back so the kiosk
+        # can never display an amount the store did not actually record.
+        server_total = database.log_transaction(cart, total)
+        return jsonify({'success': True, 'total': server_total})
     except ValueError as exc:
         return jsonify({'success': False, 'error': str(exc)}), 400
     except Exception as exc:
