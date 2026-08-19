@@ -9,7 +9,8 @@ Keeps untouched: inventory, categories, settings, restocks, announcements, sugge
 import sqlite3
 import os
 
-DB = 'store.db'
+# Same absolute path the app uses, so this never clears the wrong database.
+from database import DB_PATH as DB
 
 if not os.path.exists(DB):
     print(f"ERROR: {DB} not found. Run main.py first to create the database.")

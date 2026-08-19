@@ -65,6 +65,23 @@ def stock_text_color(stock, max_stock):
     return '#111111' if ratio >= 0.36 else '#ffffff'
 
 
+# Fraction of an item's restock baseline at or below which it counts as low.
+LOW_STOCK_RATIO = 0.25
+
+
+def is_low_stock(stock, max_stock):
+    """Single source of truth for the low-stock list.
+
+    The dashboard renders this server-side and /api/live_data recomputes it
+    every 8 s; when the two used different rules the panel visibly changed
+    contents moments after the page loaded. Items with no baseline (max_stock
+    of 0, e.g. added at zero stock) fall back to a flat unit threshold.
+    """
+    if not max_stock:
+        return stock <= 5
+    return stock <= max_stock * LOW_STOCK_RATIO
+
+
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -109,7 +126,10 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '')
         password = request.form.get('password', '')
-        if compare_digest(username, ADMIN_USERNAME) and compare_digest(password, ADMIN_PASSWORD):
+        # Compare as bytes: compare_digest raises TypeError on str containing
+        # non-ASCII, which would turn a typo into a 500 instead of a rejection.
+        if (compare_digest(username.encode('utf-8'), ADMIN_USERNAME.encode('utf-8'))
+                and compare_digest(password.encode('utf-8'), ADMIN_PASSWORD.encode('utf-8'))):
             session.clear()
             session['admin_logged_in'] = True
             return redirect(url_for('dashboard'))
@@ -155,8 +175,8 @@ def dashboard():
 
     expense_log    = database.get_expense_log()
 
-    # Low stock items (≤ 5)
-    low_stock = [i for i in inventory if i[5] and i[4] <= i[5] * 0.25]
+    # Low stock items — same rule the live poll uses
+    low_stock = [i for i in inventory if is_low_stock(i[4], i[5])]
 
     # Settings
     venmo_username = database.get_setting('venmo_username', VENMO_USERNAME)
@@ -354,7 +374,7 @@ def api_live_data():
     cat_rev_max      = max((c[1] for c in category_revenue), default=1)
     daily_revenue    = database.get_daily_revenue(7)
     daily_max        = max((d[1] for d in daily_revenue), default=0.01)
-    low_stock        = [i for i in inventory if i[4] <= 5]
+    low_stock        = [i for i in inventory if is_low_stock(i[4], i[5])]
     last_tx_id       = transactions[0]['id'] if transactions else 0
 
     new_txs = [tx for tx in transactions if tx['id'] > since_tx]

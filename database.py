@@ -1,8 +1,14 @@
+import os
 import sqlite3
 import datetime
 
+# Absolute so the database is always the one next to this file. A relative
+# path resolves against the working directory, which silently creates a second
+# empty store when main.py is run from anywhere but the project folder.
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'store.db')
+
 def init_db():
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute('''
@@ -69,6 +75,24 @@ def init_db():
         )
     ''')
 
+    # Inventory is addressed by name everywhere (update, delete, checkout), so
+    # two rows sharing a name make every one of those operations hit both:
+    # selling 5 units would deduct 5 from each row. Enforce uniqueness at the
+    # database level. On a database that already contains duplicates the index
+    # cannot be built — warn loudly rather than merging rows automatically,
+    # since only a manager knows which row holds the real count.
+    try:
+        cursor.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_name ON inventory(name)')
+    except sqlite3.IntegrityError:
+        dupes = cursor.execute(
+            'SELECT name, COUNT(*) FROM inventory GROUP BY name HAVING COUNT(*) > 1'
+        ).fetchall()
+        print('WARNING: duplicate inventory names present, uniqueness NOT enforced:')
+        for name, count in dupes:
+            print(f'  {count}x "{name}"')
+        print('  Merge them in the admin panel, then restart to enable the guard.')
+
     # Inject Starter Data
     cursor.execute('SELECT COUNT(*) FROM categories')
     if cursor.fetchone()[0] == 0:
@@ -92,7 +116,7 @@ def init_db():
     print("Database upgraded with Categories and Delete functionality.")
 
 def ensure_suggestions_table():
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS suggestions (
@@ -105,32 +129,48 @@ def ensure_suggestions_table():
 
 # --- INVENTORY & TRANSACTIONS ---
 def get_inventory():
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT id, name, category, price, stock FROM inventory WHERE stock > 0')
     items = cursor.fetchall(); conn.close()
     return items
 
 def get_all_inventory():
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT id, name, category, price, stock, max_stock FROM inventory')
     items = cursor.fetchall(); conn.close()
     return items
 
 def add_inventory_item(name, category, price, stock):
+    name = name.strip()
+    if not name:
+        raise ValueError('Item name cannot be blank.')
     if price < 0 or stock < 0:
         raise ValueError('Price and stock cannot be negative.')
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO inventory (name, category, price, stock, max_stock) VALUES (?, ?, ?, ?, ?)',
-                   (name, category, price, stock, stock))
-    conn.commit(); conn.close()
+    # Checked here as well as by the unique index: the index is missing on any
+    # database that still holds duplicates, and this message is the one the
+    # manager actually sees in the admin panel.
+    existing = cursor.execute('SELECT 1 FROM inventory WHERE name = ?', (name,)).fetchone()
+    if existing:
+        conn.close()
+        raise ValueError(f'"{name}" is already in inventory — use Update to change it.')
+    try:
+        cursor.execute('INSERT INTO inventory (name, category, price, stock, max_stock) VALUES (?, ?, ?, ?, ?)',
+                       (name, category, price, stock, stock))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        raise ValueError(f'"{name}" is already in inventory — use Update to change it.')
+    finally:
+        conn.close()
 
 def update_inventory_item(name, category, price, stock):
     if price < 0 or stock < 0:
         raise ValueError('Price and stock cannot be negative.')
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
         'UPDATE inventory SET category = ?, price = ?, stock = ?, max_stock = MAX(max_stock, ?) WHERE name = ?',
@@ -140,13 +180,13 @@ def update_inventory_item(name, category, price, stock):
 
 # --- NEW: Delete Item ---
 def delete_inventory_item(name):
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('DELETE FROM inventory WHERE name = ?', (name,))
     conn.commit(); conn.close()
 
 def log_transaction(cart_dict, total_amount):
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
         for name, details in cart_dict.items():
@@ -173,7 +213,7 @@ def log_transaction(cart_dict, total_amount):
         conn.close()
 
 def get_total_revenue():
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT SUM(total) FROM transactions')
     revenue = cursor.fetchone()[0]; conn.close()
@@ -181,7 +221,7 @@ def get_total_revenue():
 
 def get_recent_transactions(limit=50):
     """Fetches the most recent transactions and their associated items."""
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Get the overarching transactions (Newest first)
@@ -207,14 +247,14 @@ def get_recent_transactions(limit=50):
 
 # --- ANNOUNCEMENTS & CATEGORIES ---
 def get_announcements():
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT date, message FROM announcements ORDER BY id DESC LIMIT 15')
     news = cursor.fetchall(); conn.close()
     return news
 
 def add_announcement(message):
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     timestamp = datetime.datetime.now().strftime("%m/%d/%Y · %I:%M %p")
     cursor.execute('INSERT INTO announcements (date, message) VALUES (?, ?)', (timestamp, message))
@@ -227,7 +267,7 @@ def add_suggestion(message):
         raise ValueError('Suggestion cannot be blank.')
 
     ensure_suggestions_table()
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute('INSERT INTO suggestions (timestamp, message) VALUES (?, ?)', (timestamp, clean_message))
@@ -235,7 +275,7 @@ def add_suggestion(message):
 
 def get_suggestions(limit=50):
     ensure_suggestions_table()
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT id, timestamp, message FROM suggestions ORDER BY id DESC LIMIT ?', (limit,))
     suggestions = cursor.fetchall(); conn.close()
@@ -243,14 +283,14 @@ def get_suggestions(limit=50):
 
 # --- Settings (key/value) ---
 def get_setting(key, default=''):
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT value FROM settings WHERE key = ?', (key,))
     row = cursor.fetchone(); conn.close()
     return row[0] if row else default
 
 def set_setting(key, value):
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, value))
     conn.commit(); conn.close()
@@ -258,21 +298,21 @@ def set_setting(key, value):
 # --- Restock Tracking ---
 def add_restock(date_str):
     """date_str: YYYY-MM-DD.  Silently ignores duplicate dates."""
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('INSERT OR IGNORE INTO restocks (date) VALUES (?)', (date_str,))
     conn.commit(); conn.close()
 
 def get_restocks():
     """Returns [(id, 'YYYY-MM-DD'), ...] sorted ascending by date."""
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT id, date FROM restocks ORDER BY date ASC')
     rows = cursor.fetchall(); conn.close()
     return rows
 
 def delete_restock(restock_id):
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('DELETE FROM restocks WHERE id = ?', (restock_id,))
     conn.commit(); conn.close()
@@ -284,7 +324,7 @@ def get_sales_for_period(start_date, end_date=None):
     end_date=None means through present.
     Returns [(item_name, total_qty, total_rev), ...] sorted by qty DESC.
     """
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     if end_date:
         cursor.execute('''
@@ -311,7 +351,7 @@ def get_sales_for_period(start_date, end_date=None):
 
 # --- NEW: Category Functions ---
 def get_categories():
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT name FROM categories ORDER BY name')
     cats = [row[0] for row in cursor.fetchall()]; conn.close()
@@ -319,7 +359,7 @@ def get_categories():
 
 def add_category(name):
     try:
-        conn = sqlite3.connect('store.db')
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute('INSERT INTO categories (name) VALUES (?)', (name,))
         conn.commit()
@@ -332,27 +372,27 @@ def add_category(name):
 def add_expense(date, description, amount):
     if amount < 0:
         raise ValueError('Amount cannot be negative.')
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('INSERT INTO expenses (date, description, amount) VALUES (?, ?, ?)',
                    (date, description, amount))
     conn.commit(); conn.close()
 
 def delete_expense(expense_id):
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('DELETE FROM expenses WHERE id = ?', (expense_id,))
     conn.commit(); conn.close()
 
 def get_expense_log(limit=100):
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT id, date, description, amount FROM expenses ORDER BY id DESC LIMIT ?', (limit,))
     rows = cursor.fetchall(); conn.close()
     return rows
 
 def get_total_expenses():
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT SUM(amount) FROM expenses')
     result = cursor.fetchone()[0]; conn.close()
@@ -360,14 +400,14 @@ def get_total_expenses():
 
 # --- ANALYTICS ---
 def get_transaction_count():
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT COUNT(*) FROM transactions')
     count = cursor.fetchone()[0]; conn.close()
     return count
 
 def get_top_items(limit=10):
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         SELECT item_name, SUM(quantity) AS total_qty, SUM(quantity * price) AS total_rev
@@ -380,7 +420,7 @@ def get_top_items(limit=10):
     return rows  # [(name, qty, revenue), ...]
 
 def get_category_revenue():
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         SELECT COALESCE(i.category, 'Unknown') AS category,
@@ -394,7 +434,7 @@ def get_category_revenue():
     return rows  # [(category, revenue), ...]
 
 def get_daily_revenue(days=7):
-    conn = sqlite3.connect('store.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         SELECT DATE(timestamp) AS day, SUM(total) AS day_total
