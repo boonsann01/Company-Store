@@ -354,7 +354,7 @@ This keeps working when the Pi's IP changes on a new DHCP lease. Substitute your
 
 #### Multiple managers
 
-Several people can be signed in at once. Each browser holds its own independent session cookie, so logging in on one laptop never signs anyone else out — they all use the same credentials.
+Several people can have the panel open at once — there is no login, so nothing to share or sign out of.
 
 Three managers with the dashboard open, plus the kiosk, is roughly **0.5 requests/second**, which is negligible for a Pi 4. Every dashboard refreshes on its own every 8 seconds, so managers see each other's changes almost immediately.
 
