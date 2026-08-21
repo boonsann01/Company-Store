@@ -487,20 +487,20 @@ def api_checkout():
         server_total = database.log_transaction(cart, total)
         return jsonify({'success': True, 'total': server_total})
     except ValueError as exc:
+        # ValueError messages are written for the customer ("Only 2 left").
         return jsonify({'success': False, 'error': str(exc)}), 400
-    except Exception as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 500
+    except Exception:
+        # Anything else is a bug. Log it server-side; don't echo internals to
+        # an unauthenticated caller on the LAN.
+        app.logger.exception('checkout failed')
+        return jsonify({'success': False,
+                        'error': 'Checkout failed — please see a manager.'}), 500
 
 
-@app.route('/api/suggestion', methods=['POST'])
-def api_suggestion():
-    data = request.get_json(force=True)
-    msg  = data.get('message', '')
-    try:
-        database.add_suggestion(msg)
-        return jsonify({'success': True})
-    except ValueError as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 400
+# The kiosk's suggestion box was removed, so nothing posts suggestions any
+# more. The route is gone with it rather than left as an unauthenticated,
+# unbounded write endpoint on a LAN-facing port. Existing suggestions are
+# retained and still readable in the admin panel.
 
 
 @app.route('/api/venmo_qr')

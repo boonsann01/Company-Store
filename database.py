@@ -185,6 +185,29 @@ def delete_inventory_item(name):
     cursor.execute('DELETE FROM inventory WHERE name = ?', (name,))
     conn.commit(); conn.close()
 
+def _whole_quantity(name, details):
+    """Extract a whole-number quantity from one cart line, or raise.
+
+    Truncating would be wrong here: a request for 2.7 units is malformed, and
+    silently selling 2 hides the defect behind a confusing "prices changed"
+    message downstream when the client's total no longer matches.
+    """
+    try:
+        raw = details['quantity']
+    except (TypeError, KeyError):
+        raise ValueError(f'Invalid quantity for {name}.')
+    # bool is an int subclass — True would otherwise slip through as 1.
+    if isinstance(raw, bool):
+        raise ValueError(f'Invalid quantity for {name}.')
+    try:
+        qty = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f'Invalid quantity for {name}.')
+    if qty != raw:
+        raise ValueError(f'Invalid quantity for {name}.')
+    return qty
+
+
 def log_transaction(cart_dict, total_amount=None):
     """Record a sale and deduct stock. Returns the authoritative total.
 
@@ -198,15 +221,17 @@ def log_transaction(cart_dict, total_amount=None):
     mid-order, and the sale is rejected so the customer can re-review instead
     of being shown a Venmo QR for a different amount than the store records.
     """
+    if not cart_dict:
+        # An empty cart would otherwise commit a $0.00 transaction, inflating
+        # tx_count — the divisor behind avg_order on the analytics page.
+        raise ValueError('Cart is empty.')
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
         priced = []
         for name, details in cart_dict.items():
-            try:
-                qty = int(details['quantity'])
-            except (TypeError, ValueError, KeyError):
-                raise ValueError(f'Invalid quantity for {name}.')
+            qty = _whole_quantity(name, details)
             cursor.execute('SELECT stock, price FROM inventory WHERE name = ?', (name,))
             row = cursor.fetchone()
             if row is None:
@@ -233,7 +258,16 @@ def log_transaction(cart_dict, total_amount=None):
         for name, qty, price in priced:
             cursor.execute('INSERT INTO transaction_items (transaction_id, item_name, quantity, price) VALUES (?, ?, ?, ?)',
                            (transaction_id, name, qty, price))
-            cursor.execute('UPDATE inventory SET stock = stock - ? WHERE name = ?', (qty, name))
+            # The stock check above ran in autocommit, before this transaction
+            # opened, so a concurrent sale could have consumed the units since.
+            # Re-check inside the UPDATE itself: if the row no longer has the
+            # stock, it matches nothing and we roll the whole sale back rather
+            # than driving stock negative.
+            cursor.execute(
+                'UPDATE inventory SET stock = stock - ? WHERE name = ? AND stock >= ?',
+                (qty, name, qty))
+            if cursor.rowcount != 1:
+                raise ValueError(f'{name} just sold out — please review your order.')
         conn.commit()
         return server_total
     except:

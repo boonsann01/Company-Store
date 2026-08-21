@@ -483,6 +483,20 @@ body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);
   <div class="inner">
     <div class="confirm-panel">
 
+      <!-- Phase 3: terminal lockout. Reached only when a sale may have
+           committed but we could not confirm it. Deliberately contains no
+           control that leads back to a loaded cart — a disabled checkout
+           button is not enough, because "Edit Cart" would walk right around
+           it and charge the customer a second time. -->
+      <div id="confirm-locked-phase" style="display:none">
+        <h2 class="confirm-title">Order Not Confirmed</h2>
+        <div class="warn-text" style="margin:14px 0 18px;font-size:16px;line-height:1.5">
+          We couldn't confirm whether your order went through.<br>
+          Please see a manager before paying again.
+        </div>
+        <button class="btn-done" onclick="afterLocked()">Back to Start</button>
+      </div>
+
       <!-- Phase 1: order review -->
       <div id="confirm-summary-phase">
         <div class="confirm-hd">
@@ -524,6 +538,7 @@ const S = {
   categories: [],
   announcements: [],
   busy: false,     // transition lock
+  locked: false,   // a sale's outcome is unknown — no further checkout allowed
 };
 
 // ── API ────────────────────────────────────────────────────────────────────
@@ -908,6 +923,7 @@ function goConfirm() {
     // Reset to summary phase
     document.getElementById('confirm-summary-phase').style.display = '';
     document.getElementById('confirm-qr-phase').style.display = 'none';
+    document.getElementById('confirm-locked-phase').style.display = 'none';
     document.getElementById('confirm-warn').textContent = '';
     const btn = document.getElementById('btn-venmo');
     btn.disabled = false;
@@ -941,6 +957,9 @@ function renderConfirm() {
 }
 
 async function doVenmoCheckout() {
+  // Once a sale's outcome is unknown, nothing may submit another one until a
+  // manager has been involved and the screen has been reset from the start.
+  if (S.locked) return;
   if (!Object.keys(S.cart).length) return;
   const total = Object.values(S.cart).reduce((s, i) => s + i.price * i.quantity, 0);
   const btn = document.getElementById('btn-venmo');
@@ -983,19 +1002,82 @@ async function doVenmoCheckout() {
     startQRPhase();
   } catch (e) {
     const warn = document.getElementById('confirm-warn');
-    // Safe to retry when the sale definitely did not happen: either we never
-    // reached the checkout call, or the server explicitly refused it (out of
-    // stock, stale prices). A 5xx or network drop on checkout itself is the
-    // one ambiguous case — never hand back a button that could charge twice.
-    const nothingCharged = stage === 'qr' || (e.status >= 400 && e.status < 500);
-    if (nothingCharged) {
+    btn.textContent = 'Generate Venmo QR & Checkout';
+
+    if (stage === 'qr') {
+      // Never reached the sale. Nothing was charged; retry in place.
       btn.disabled = false;
-      btn.textContent = 'Generate Venmo QR & Checkout';
       warn.textContent = e.message || 'Checkout failed. Try again.';
-    } else {
-      warn.textContent = 'Could not confirm your order — please see a manager. Do not retry.';
+      return;
     }
+
+    if (e.status >= 400 && e.status < 500) {
+      // The server refused the sale — stale prices or stock gone. Nothing was
+      // charged, but retrying as-is would just fail identically, so re-price
+      // the cart against live data and send the customer back to review it.
+      btn.disabled = false;
+      warn.textContent = '';
+      await repriceCart();
+      S.busy = false;
+      if (!Object.keys(S.cart).length) { goStart(); return; }
+      goTo('screen-checkout', -1, () => {
+        renderCart();
+        renderItems();
+        hideCancelMenu();
+        setWarn(e.message || 'Your order changed — please review it.');
+      });
+      return;
+    }
+
+    // 5xx or network drop after the sale was submitted: we cannot tell whether
+    // it committed. Lock the screen down structurally rather than leaving a
+    // reachable path back to a cart that might charge again.
+    lockConfirmScreen();
   }
+}
+
+async function repriceCart() {
+  // Rebuild the cart from live inventory so "review your order" is actually
+  // actionable — cart lines cache price and stock from when the item was
+  // tapped, and nothing else refreshes them.
+  try {
+    const d = await api('/api/kiosk_poll');
+    S.inventory     = d.inventory;
+    S.announcements = d.announcements;
+    S.categories    = d.categories;
+  } catch (_) { /* keep the stale cart rather than losing the order */ }
+
+  const rebuilt = {};
+  for (const [name, line] of Object.entries(S.cart)) {
+    const live = S.inventory.find(i => i.name === name);
+    if (!live || live.stock < 1) continue;          // sold out or delisted
+    rebuilt[name] = {
+      price:    live.price,
+      quantity: Math.min(line.quantity, live.stock),
+      stock:    live.stock
+    };
+  }
+  S.cart = rebuilt;
+}
+
+function lockConfirmScreen() {
+  // Hiding the controls is not enough on its own — the cart is what makes a
+  // second charge possible, so it goes here rather than when the customer
+  // finally taps away. If nothing committed they lose only their selections;
+  // if something did, no chargeable cart survives anywhere in the app.
+  S.locked = true;
+  clearCart();
+  document.getElementById('confirm-summary-phase').style.display = 'none';
+  document.getElementById('confirm-qr-phase').style.display      = 'none';
+  document.getElementById('confirm-locked-phase').style.display  = '';
+  disarmIdle();
+  disarmQRIdle();
+}
+
+function afterLocked() {
+  S.locked = false;
+  S.busy   = false;
+  goStart();
 }
 
 function afterQR() {

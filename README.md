@@ -12,7 +12,6 @@ A self-contained touchscreen point-of-sale kiosk for a military unit company sto
 - **Menu & cart** — browse items by animated sliding category pills; add/remove with tap; live quantity badges
 - **Order confirm** — full itemized summary with large readable cart pills before checkout
 - **Venmo QR checkout** — generates a real-time QR code pre-filled with the exact total and item breakdown (e.g. `2x White Monster, 3x Quest Bar`); "Done" button locks for 5 seconds then auto-returns to start after 1 minute of inactivity
-- **Suggestion box** — customers can submit product requests
 - **Shutter transition** — smooth venetian-blind animation between all screens
 - **Auto item icons** — every product card picks a matching emoji from its name (ramen, ice cream, energy drinks, snack cakes, jerky…) with per-category fallbacks — no image files to manage
 - **Scrolling menu** — the item grid scrolls when a category holds more products than fit on screen; cards always render at full size instead of compressing
@@ -22,7 +21,7 @@ A self-contained touchscreen point-of-sale kiosk for a military unit company sto
 - **📦 Inventory** — add, update, delete items and categories; post announcements to kiosk; update Venmo username anytime. Each item records its own restock capacity the first time it is stocked
 - **💬 Suggestions** — view all customer-submitted feedback
 - **📊 Analytics** — revenue, expenses, net profit, margin, avg order value, top-selling items chart, revenue by category, 7-day sales bar chart, low-stock alerts, full expense log
-- **📉 Relative stock bars** — every stock bar is scaled to that item's *own* restock capacity, so a full shelf reads 100% green whether the item restocks at 8 units or 40. Low-stock alerts fire at 25% of capacity instead of a fixed count
+- **📉 Relative stock bars** — every stock bar is scaled to that item's *own* restock capacity, so a full shelf reads 100% green whether the item restocks at 8 units or 40. Low-stock alerts fire at 25% of capacity instead of a fixed count (items with no recorded capacity fall back to a flat 5 units)
 - **📈 Sales** — log restock dates and view exact units sold + revenue per restock cycle
 - **🔴 Live updates** — admin page polls every 8 seconds; a green toast notification appears for every new sale and all data updates in real time without a page refresh
 
@@ -409,13 +408,32 @@ sudo systemctl restart kiosk.service
 | Tab | What you can do |
 |-----|----------------|
 | **📦 Inventory** | Add / update / delete items and categories; post announcements to kiosk ticker; update Venmo username |
-| **💬 Suggestions** | Read product suggestions submitted from the kiosk |
+| **💬 Suggestions** | Read suggestions collected while the kiosk's suggestion box was live (the box was removed; existing entries are retained) |
 | **📊 Analytics** | Revenue, expenses, profit, top items, category revenue, 7-day chart, low-stock alerts, expense log |
 | **📈 Sales** | Log restock dates; click any period to see every item sold and total revenue for that cycle |
 
 The admin page updates **live every 8 seconds**. A green **🛒 New Sale** toast appears in the top-right corner on every checkout. A `● LIVE` indicator in the navbar turns red if the server is unreachable.
 
 The **kiosk** pulls the same data every **20 seconds** from `/api/kiosk_poll`. Anything you change in the admin panel — restocking an item, adding a product, deleting one, or posting an announcement — shows up on the kiosk screen within 20 seconds on its own. You never need to walk over and restart it.
+
+---
+
+## Tests
+
+```bash
+python tests/run_all.py
+```
+
+No dependencies beyond what the kiosk already installs. The suites redirect the
+database to a temporary file, so running them never touches `store.db`.
+
+| Suite | Covers |
+|-------|--------|
+| `tests/test_database.py` | Inventory name uniqueness, server-side sale pricing, whole-number quantities, empty-cart and oversell refusal, concurrent-sale stock accounting, low-stock rule |
+| `tests/test_routes.py` | Auth gating, kiosk API, checkout endpoint, error handling, admin panel routes |
+
+Every case corresponds to a defect that actually reached the working tree. If
+you change `log_transaction` or the checkout flow, run these first.
 
 ---
 
