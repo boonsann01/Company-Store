@@ -148,8 +148,6 @@ pip install -r requirements.txt --break-system-packages
 > ⚠️ **Required before running on the Pi.** The defaults are for local development only and must not be used in production.
 
 ```bash
-export STORE_ADMIN_USERNAME="your_admin_username"
-export STORE_ADMIN_PASSWORD="your_strong_password"
 export STORE_ADMIN_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
 export VENMO_USERNAME="YourVenmoHandle"
 ```
@@ -208,11 +206,11 @@ python3 -c 'import secrets; print(secrets.token_hex(32))'
 
 Copy the output — it becomes `STORE_ADMIN_SECRET_KEY` in step 7.
 
-> ### ⚠️ Both secrets are mandatory before this touches a network
+> ### ⚠️ The admin panel has no password
 >
-> `STORE_ADMIN_PASSWORD` **and** `STORE_ADMIN_SECRET_KEY` must both be set in the systemd unit. The in-code fallbacks for both are public in this repository.
+> This is deliberate — it is a hobby store on a trusted network. Anyone who can reach `:5000` can change prices, edit stock, and delete items.
 >
-> The secret key is the one people underestimate: Flask session cookies are **signed, not encrypted**. If the key is left at its default, anyone on the same Wi-Fi can forge a cookie marking themselves logged in and skip the login form entirely — a strong password does not help. Set both, or the admin panel is effectively open.
+> The network is the only boundary, so put the kiosk on a network you trust. To restrict the panel to the Pi itself, set `HOST = '127.0.0.1'` in `main.py`; the touchscreen still works, but nothing else on the network can reach it.
 
 **5 — Confirm fullscreen (nothing to change)**
 
@@ -303,8 +301,6 @@ User=pi
 WorkingDirectory=/home/pi/Company-Store
 Environment="DISPLAY=:0"
 Environment="XAUTHORITY=/home/pi/.Xauthority"
-Environment="STORE_ADMIN_USERNAME=your_admin_username"
-Environment="STORE_ADMIN_PASSWORD=your_strong_password"
 Environment="STORE_ADMIN_SECRET_KEY=your_secret_key_here"
 Environment="VENMO_USERNAME=YourVenmoHandle"
 ExecStart=/usr/bin/python3 /home/pi/Company-Store/main.py
@@ -344,7 +340,7 @@ hostname -I
 http://192.168.1.42:5000
 ```
 
-Substitute the address from step 1. You'll land on the login page — sign in with the `STORE_ADMIN_USERNAME` / `STORE_ADMIN_PASSWORD` set in the systemd unit.
+Substitute the address from step 1. The admin panel opens straight away — there is no login.
 
 **3 — Use the hostname instead (recommended).** Windows 10 and 11 resolve mDNS natively, and Raspberry Pi OS advertises itself over Avahi:
 
@@ -372,7 +368,6 @@ Three managers with the dashboard open, plus the kiosk, is roughly **0.5 request
 | Connection times out | Confirm both devices are on the *same* SSID (not one on a `-Guest` or 5 GHz-only network), and that the service is up: `sudo systemctl status kiosk.service` |
 | Connection refused | The service isn't running, or an older build is deployed that still binds `127.0.0.1`. Check `git log --oneline -1` on the Pi and pull if it predates the `0.0.0.0` change |
 | Works by IP, not by `.local` | mDNS is blocked or Avahi isn't running: `sudo systemctl status avahi-daemon`. Fall back to the IP with a DHCP reservation |
-| Reachable but login fails | `STORE_ADMIN_USERNAME` / `STORE_ADMIN_PASSWORD` in the systemd unit differ from what you're typing. `sudo systemctl show kiosk.service -p Environment` prints what the service actually loaded |
 
 ---
 
@@ -396,9 +391,7 @@ sudo systemctl restart kiosk.service
 
 | Variable | Default (dev only) | Description |
 |----------|--------------------|-------------|
-| `STORE_ADMIN_USERNAME` | `b1_admin` | Admin panel login username |
-| `STORE_ADMIN_PASSWORD` | *(a working password is hardcoded in `admin_server.py` and is public in this repo)* | Admin panel login password — **must be overridden before fielding** |
-| `STORE_ADMIN_SECRET_KEY` | `change-this-before-fielding` | Flask session secret — generate with `secrets.token_hex(32)`. **Must be overridden**: cookies are signed with this, so a known key lets anyone forge a logged-in session |
+| `STORE_ADMIN_SECRET_KEY` | `kiosk-flash-messages` | Flask session secret. With the login removed this only signs the "Added X to inventory" confirmation messages, so the default is fine — set it only if you want those cookies unguessable |
 | `VENMO_USERNAME` | `YourVenmoHere` | Venmo handle used in checkout QR codes — can also be updated live via **Admin → Inventory → Venmo Checkout Settings** |
 
 ---
@@ -447,7 +440,7 @@ you change `log_transaction` or the checkout flow, run these first.
 | Admin shows `● OFFLINE` badge | Flask server restarted — page reconnects automatically within 8 s |
 | Kiosk doesn't auto-start on boot | Check `journalctl -u kiosk.service` — verify `DISPLAY=:0` and `XAUTHORITY` in the unit file |
 | `store.db` not found | Run `python3 main.py` once — `database.init_db()` creates it automatically |
-| Admin page stuck on old data after restart | Hard-refresh the browser (`Ctrl+Shift+R`) — session cookie may have expired |
+| Admin page stuck on old data after restart | Hard-refresh the browser (`Ctrl+Shift+R`) |
 | Stock bar shows yellow/red at full capacity | That item's `max_stock` is lower than what is on the shelf. Update the item once in **Admin → Inventory** — `max_stock` rises to match the new stock and the bar reads 100% green |
 | Kiosk not showing a new item or announcement | Wait up to 20 s for the next poll. If it still doesn't appear, confirm the kiosk can reach `/api/kiosk_poll` and check `journalctl -u kiosk.service` |
 
@@ -455,10 +448,9 @@ you change `log_transaction` or the checkout flow, run these first.
 
 ## Security Notes
 
-- Set all three environment variables (`USERNAME`, `PASSWORD`, `SECRET_KEY`) **before** fielding on the Pi. These are not placeholders — `admin_server.py` ships a real, working admin password and a fixed session key, both readable by anyone who opens this repository
-- **`STORE_ADMIN_SECRET_KEY` matters more than the password.** Flask signs session cookies with it rather than encrypting them. Leave it at the default and an attacker on the same Wi-Fi can mint a cookie that says they're logged in, never touching the login form. Overriding the password alone does not close this
-- Use a strong, unique admin password — port 5000 is reachable by anyone on the same Wi-Fi
-- Treat any credential previously committed to this repo as compromised — rotate it rather than reusing it elsewhere
+- **The admin panel has no login.** This is a deliberate choice for a hobby store: anyone who can reach port 5000 can change prices, edit stock, and delete items. The network is the only boundary — put the kiosk on one you trust
+- To restrict the panel to the Pi itself, set `HOST = '127.0.0.1'` in `main.py`. The touchscreen still works (it loads over `127.0.0.1` regardless); nothing else on the network can reach the admin panel
+- **Earlier versions of this repository committed a real admin password.** It is still in the git history. Treat it as compromised and rotate it anywhere it was reused — removing it from the current files does not remove it from history
 - Back up `store.db` regularly once the store goes live: `cp store.db store.db.bak`
 - The kiosk window has no browser chrome or address bar — customers cannot navigate away from the kiosk
 

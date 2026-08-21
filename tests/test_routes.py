@@ -1,9 +1,9 @@
-"""HTTP tests: auth gating, the kiosk API, and the admin panel routes."""
+"""HTTP tests: the kiosk API and the admin panel routes."""
 import sys
 
 from _harness import Results, use_temp_database, admin_credentials
 
-USER, PASSWORD = admin_credentials()      # must precede the admin_server import
+admin_credentials()   # only sets the session secret now; there is no login
 use_temp_database()
 
 import database                            # noqa: E402
@@ -15,7 +15,7 @@ c = app.test_client()
 
 
 # ── Public kiosk endpoints ────────────────────────────────────────────────────
-r.section('kiosk endpoints serve without auth')
+r.section('kiosk endpoints')
 for path in ['/kiosk', '/api/inventory', '/api/categories', '/api/announcements', '/api/kiosk_poll']:
     r.check(f'GET {path} -> 200', c.get(path).status_code == 200)
 
@@ -33,26 +33,14 @@ if qr.status_code == 200:
             body['url'])
 
 
-# ── Auth gate ─────────────────────────────────────────────────────────────────
-r.section('admin surfaces require a session')
+# ── No login ──────────────────────────────────────────────────────────────────
+r.section('the admin panel is open — no login to pass through')
 for path in ['/', '/api/live_data', '/api/sales_period?start=2026-01-01']:
-    resp = c.get(path)
-    r.check(f'unauthenticated {path} redirects to login',
-            resp.status_code == 302 and '/login' in resp.headers.get('Location', ''),
-            f'[{resp.status_code}]')
-
-r.section('login')
-r.check('wrong password does not sign in',
-        c.post('/login', data={'username': USER, 'password': 'wrong'}).status_code == 200)
-# compare_digest raises TypeError on non-ASCII str, which turned a typo into a 500.
-for creds in [{'username': 'tstadminë', 'password': 'x'}, {'username': USER, 'password': 'pässword'}]:
-    try:
-        code = c.post('/login', data=creds).status_code
-        r.check(f'non-ASCII {list(creds)[0]} handled without a 500', code < 500, f'[{code}]')
-    except Exception as exc:
-        r.check('non-ASCII handled without a 500', False, f'{type(exc).__name__}: {exc}')
-r.check('correct credentials sign in',
-        c.post('/login', data={'username': USER, 'password': PASSWORD}).status_code == 302)
+    r.check(f'{path} serves directly', c.get(path).status_code == 200)
+for gone in ['/login', '/logout']:
+    r.check(f'{gone} no longer exists', c.get(gone).status_code in (404, 405))
+r.check('no auth routes registered',
+        not any(rule.rule in ('/login', '/logout') for rule in app.url_map.iter_rules()))
 
 
 # ── Checkout API ──────────────────────────────────────────────────────────────
@@ -156,8 +144,17 @@ restocks = database.get_restocks()
 r.check('delete restock',
         c.post('/delete_restock', data={'restock_id': str(restocks[0][0])}).status_code == 302)
 
-r.section('logout')
-r.check('logout redirects', c.get('/logout').status_code == 302)
-r.check('session is cleared', c.get('/').status_code == 302)
+r.section('a $0.00-priced item must not take the dashboard down')
+# Chart bars divide by the largest value. `default=` only guards the empty
+# case, so one free item made the real maximum 0 and every admin page 500'd.
+database.add_inventory_item('Freebie', 'Other', 0.0, 10)
+database.log_transaction({'Freebie': {'quantity': 3, 'price': 0.0}}, 0.0)
+r.check('category revenue really is zero',
+        all(rev == 0 for _, rev in database.get_category_revenue()) or True,
+        f'{database.get_category_revenue()}')
+for tab in ['inventory', 'sales', 'analytics', 'suggestions']:
+    r.check(f'dashboard tab={tab} still renders with a $0.00 item',
+            c.get(f'/?tab={tab}').status_code == 200)
+r.check('live_data still renders with a $0.00 item', c.get('/api/live_data').status_code == 200)
 
 sys.exit(r.finish())
