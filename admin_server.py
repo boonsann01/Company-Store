@@ -1,3 +1,17 @@
+"""Flask routes for the kiosk and the admin panel.
+
+Two audiences share one app:
+
+- `/kiosk` and `/api/*` (except `/api/live_data` and `/api/sales_period`) are
+  public. They are what the touchscreen calls, and they carry no auth because
+  the kiosk has no one to log in as.
+- Everything else is behind `@login_required` and is meant for a manager on the
+  LAN, reachable from a laptop or phone on the same network.
+
+Data access goes through database.py; this module holds request handling,
+presentation helpers, and the analytics assembled for both the rendered page
+and its polling endpoint.
+"""
 import os
 import io
 import base64
@@ -67,6 +81,8 @@ def stock_text_color(stock, max_stock):
 
 # Fraction of an item's restock baseline at or below which it counts as low.
 LOW_STOCK_RATIO = 0.25
+# Fallback for items with no recorded restock baseline to take a fraction of.
+LOW_STOCK_UNITS = 5
 
 
 def is_low_stock(stock, max_stock):
@@ -78,8 +94,77 @@ def is_low_stock(stock, max_stock):
     of 0, e.g. added at zero stock) fall back to a flat unit threshold.
     """
     if not max_stock:
-        return stock <= 5
+        return stock <= LOW_STOCK_UNITS
     return stock <= max_stock * LOW_STOCK_RATIO
+
+
+def _display_date(date_str):
+    """YYYY-MM-DD as MM/DD/YYYY, passing anything unparseable through as-is."""
+    try:
+        return datetime.datetime.strptime(date_str, '%Y-%m-%d').strftime('%m/%d/%Y')
+    except ValueError:
+        return date_str
+
+
+def build_restock_periods(restocks):
+    """Turn restock dates into the spans between them, most recent first.
+
+    Each restock opens a period that runs until the next one; the newest is
+    still open, and displays as "Present". `restocks` arrives oldest-first as
+    [(id, 'YYYY-MM-DD'), ...].
+    """
+    periods = []
+    for index, (restock_id, start) in enumerate(restocks):
+        is_last = index + 1 == len(restocks)
+        end = None if is_last else restocks[index + 1][1]
+        periods.append({
+            'id':            restock_id,
+            'start':         start,
+            'end':           end or '',
+            'display_start': _display_date(start),
+            'display_end':   'Present' if end is None else _display_date(end),
+            'is_current':    end is None,
+        })
+    periods.reverse()
+    return periods
+
+
+def build_analytics(inventory):
+    """Every figure the analytics panel shows, computed in one place.
+
+    The dashboard renders these into the page and /api/live_data returns the
+    same numbers as JSON. They used to be computed separately in each, and the
+    two copies drifted — which is how the low-stock list ended up disagreeing
+    with itself between page load and the first poll.
+
+    `inventory` is passed in rather than fetched here because both callers
+    already need it for their own purposes.
+    """
+    revenue          = database.get_total_revenue()
+    expenses_total   = database.get_total_expenses()
+    profit           = revenue - expenses_total
+    tx_count         = database.get_transaction_count()
+    top_items        = database.get_top_items()
+    category_revenue = database.get_category_revenue()
+    daily_revenue    = database.get_daily_revenue()
+
+    return {
+        'revenue':          revenue,
+        'expenses_total':   expenses_total,
+        'profit':           profit,
+        'profit_margin':    round(profit / revenue * 100, 1) if revenue > 0 else 0.0,
+        'tx_count':         tx_count,
+        'avg_order':        round(revenue / tx_count, 2) if tx_count > 0 else 0.0,
+        'top_items':        top_items,
+        # The chart bars are drawn as a percentage of the largest value, so the
+        # maxima default to something non-zero to avoid dividing by it.
+        'top_items_max':    max((i[1] for i in top_items), default=1),
+        'category_revenue': category_revenue,
+        'cat_rev_max':      max((c[1] for c in category_revenue), default=1),
+        'daily_revenue':    daily_revenue,
+        'daily_max':        max((d[1] for d in daily_revenue), default=0.01),
+        'low_stock':        [i for i in inventory if is_low_stock(i[4], i[5])],
+    }
 
 
 LOGIN_TEMPLATE = """
@@ -156,59 +241,6 @@ def dashboard():
     admin_alert  = session.pop('admin_alert', None)
     active_tab   = request.args.get('tab', 'inventory')
 
-    # ── Analytics ──
-    revenue        = database.get_total_revenue()
-    expenses_total = database.get_total_expenses()
-    profit         = revenue - expenses_total
-    profit_margin  = round((profit / revenue * 100), 1) if revenue > 0 else 0.0
-    tx_count       = database.get_transaction_count()
-    avg_order      = round(revenue / tx_count, 2) if tx_count > 0 else 0.0
-
-    top_items      = database.get_top_items(10)
-    top_items_max  = max((i[1] for i in top_items), default=1)
-
-    category_revenue = database.get_category_revenue()
-    cat_rev_max      = max((c[1] for c in category_revenue), default=1)
-
-    daily_revenue  = database.get_daily_revenue(7)
-    daily_max      = max((d[1] for d in daily_revenue), default=0.01)
-
-    expense_log    = database.get_expense_log()
-
-    # Low stock items — same rule the live poll uses
-    low_stock = [i for i in inventory if is_low_stock(i[4], i[5])]
-
-    # Settings
-    venmo_username = database.get_setting('venmo_username', VENMO_USERNAME)
-
-    # Restock periods — build a list of dicts sorted most-recent-first
-    restocks_raw = database.get_restocks()   # [(id, 'YYYY-MM-DD'), ...] ASC
-    restock_periods = []
-    for i, (rid, date_str) in enumerate(restocks_raw):
-        end_str = restocks_raw[i + 1][1] if i + 1 < len(restocks_raw) else None
-        try:
-            display_start = datetime.datetime.strptime(date_str, '%Y-%m-%d').strftime('%m/%d/%Y')
-        except ValueError:
-            display_start = date_str
-        if end_str:
-            try:
-                display_end = datetime.datetime.strptime(end_str, '%Y-%m-%d').strftime('%m/%d/%Y')
-            except ValueError:
-                display_end = end_str
-        else:
-            display_end = 'Present'
-        restock_periods.append({
-            'id':            rid,
-            'start':         date_str,
-            'end':           end_str or '',
-            'display_start': display_start,
-            'display_end':   display_end,
-            'is_current':    end_str is None,
-        })
-    restock_periods.reverse()   # show most-recent period first
-
-    today_str = datetime.date.today().strftime('%Y-%m-%d')
-
     return render_template(
         'admin.html',
         inventory=inventory,
@@ -217,27 +249,18 @@ def dashboard():
         suggestions=suggestions,
         admin_alert=admin_alert,
         active_tab=active_tab,
-        revenue=revenue,
-        expenses_total=expenses_total,
-        profit=profit,
-        profit_margin=profit_margin,
-        tx_count=tx_count,
-        avg_order=avg_order,
-        top_items=top_items,
-        top_items_max=top_items_max,
-        category_revenue=category_revenue,
-        cat_rev_max=cat_rev_max,
-        daily_revenue=daily_revenue,
-        daily_max=daily_max,
-        expense_log=expense_log,
-        low_stock=low_stock,
+        expense_log=database.get_expense_log(),
+        venmo_username=database.get_setting('venmo_username', VENMO_USERNAME),
+        restock_periods=build_restock_periods(database.get_restocks()),
+        today=datetime.date.today().strftime('%Y-%m-%d'),
+        last_tx_id=last_tx_id,
+        # Formatting helpers the stock bars call per row.
         stock_color=stock_color,
         stock_percent=stock_percent,
         stock_text_color=stock_text_color,
-        venmo_username=venmo_username,
-        restock_periods=restock_periods,
-        today=today_str,
-        last_tx_id=last_tx_id,
+        # revenue, profit, top_items, low_stock, ... — the same figures
+        # /api/live_data serves, so the page and the poll cannot disagree.
+        **build_analytics(inventory),
     )
 
 
@@ -360,22 +383,10 @@ def api_live_data():
     """Single endpoint polled every 8 s by the admin page for live updates."""
     since_tx = request.args.get('since_tx', 0, type=int)
 
-    inventory        = database.get_all_inventory()
-    transactions     = database.get_recent_transactions(50)
-    revenue          = database.get_total_revenue()
-    expenses_total   = database.get_total_expenses()
-    profit           = revenue - expenses_total
-    profit_margin    = round((profit / revenue * 100), 1) if revenue > 0 else 0.0
-    tx_count         = database.get_transaction_count()
-    avg_order        = round(revenue / tx_count, 2) if tx_count > 0 else 0.0
-    top_items        = database.get_top_items(10)
-    top_items_max    = max((i[1] for i in top_items), default=1)
-    category_revenue = database.get_category_revenue()
-    cat_rev_max      = max((c[1] for c in category_revenue), default=1)
-    daily_revenue    = database.get_daily_revenue(7)
-    daily_max        = max((d[1] for d in daily_revenue), default=0.01)
-    low_stock        = [i for i in inventory if is_low_stock(i[4], i[5])]
-    last_tx_id       = transactions[0]['id'] if transactions else 0
+    inventory    = database.get_all_inventory()
+    transactions = database.get_recent_transactions()
+    stats        = build_analytics(inventory)
+    last_tx_id   = transactions[0]['id'] if transactions else 0
 
     new_txs = [tx for tx in transactions if tx['id'] > since_tx]
 
@@ -393,19 +404,22 @@ def api_live_data():
         ],
         'inventory':        [{'id': i[0], 'name': i[1], 'category': i[2],
                                'price': i[3], 'stock': i[4], 'max_stock': i[5]} for i in inventory],
-        'revenue':          revenue,
-        'expenses_total':   expenses_total,
-        'profit':           profit,
-        'profit_margin':    profit_margin,
-        'tx_count':         tx_count,
-        'avg_order':        avg_order,
-        'top_items':        [{'name': r[0], 'qty': r[1], 'rev': round(r[2], 2)} for r in top_items],
-        'top_items_max':    top_items_max,
-        'category_revenue': [{'cat': c[0], 'rev': round(c[1], 2)} for c in category_revenue],
-        'cat_rev_max':      cat_rev_max,
-        'daily_revenue':    [{'day': d[0], 'rev': d[1]} for d in daily_revenue],
-        'daily_max':        daily_max,
-        'low_stock':        [{'id': i[0], 'name': i[1], 'stock': i[4], 'max_stock': i[5]} for i in low_stock],
+        'revenue':          stats['revenue'],
+        'expenses_total':   stats['expenses_total'],
+        'profit':           stats['profit'],
+        'profit_margin':    stats['profit_margin'],
+        'tx_count':         stats['tx_count'],
+        'avg_order':        stats['avg_order'],
+        'top_items':        [{'name': r[0], 'qty': r[1], 'rev': round(r[2], 2)}
+                             for r in stats['top_items']],
+        'top_items_max':    stats['top_items_max'],
+        'category_revenue': [{'cat': c[0], 'rev': round(c[1], 2)}
+                             for c in stats['category_revenue']],
+        'cat_rev_max':      stats['cat_rev_max'],
+        'daily_revenue':    [{'day': d[0], 'rev': d[1]} for d in stats['daily_revenue']],
+        'daily_max':        stats['daily_max'],
+        'low_stock':        [{'id': i[0], 'name': i[1], 'stock': i[4], 'max_stock': i[5]}
+                             for i in stats['low_stock']],
     })
 
 

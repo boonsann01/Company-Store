@@ -1,146 +1,176 @@
+"""SQLite data layer for the company store kiosk.
+
+Every function here opens the database, does one job, and closes it. The store
+is a single file next to this module; there is no server and no ORM. Callers
+are the Flask routes in admin_server.py.
+
+Connections are opened through the `_cursor` context manager below rather than
+by hand, so that closing (and, for writes, committing or rolling back) is
+structural instead of something each function has to remember.
+"""
 import os
 import sqlite3
 import datetime
+from contextlib import contextmanager
 
 # Absolute so the database is always the one next to this file. A relative
 # path resolves against the working directory, which silently creates a second
 # empty store when main.py is run from anywhere but the project folder.
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'store.db')
 
+# How much history each view shows.
+ANNOUNCEMENT_LIMIT = 15
+TRANSACTION_LIMIT = 50
+SUGGESTION_LIMIT = 50
+EXPENSE_LIMIT = 100
+TOP_ITEMS_LIMIT = 10
+REVENUE_CHART_DAYS = 7
+
+# Money is compared to the half-cent; anything closer is float noise.
+CENT_TOLERANCE = 0.005
+
+
+@contextmanager
+def _cursor(commit=False):
+    """Yield a cursor against the store, closing the connection afterwards.
+
+    Read helpers call this bare. Writers pass commit=True, which commits when
+    the body finishes cleanly and rolls back if it raises — so a half-applied
+    sale can never be left behind.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        yield conn.cursor()
+        if commit:
+            conn.commit()
+    except BaseException:
+        # Deliberately BaseException: a KeyboardInterrupt mid-write must roll
+        # back too. The exception is re-raised untouched.
+        if commit:
+            conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+# ── Schema ────────────────────────────────────────────────────────────────────
+
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    """Create any missing tables and indexes. Safe to run on every start."""
+    with _cursor(commit=True) as cur:
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS inventory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+                category TEXT NOT NULL, price REAL NOT NULL, stock INTEGER NOT NULL,
+                max_stock INTEGER NOT NULL DEFAULT 0
+            )
+        ''')
+        # Migration: max_stock arrived after the first databases were created.
+        try:
+            cur.execute('ALTER TABLE inventory ADD COLUMN max_stock INTEGER NOT NULL DEFAULT 0')
+            cur.execute('UPDATE inventory SET max_stock = stock WHERE max_stock = 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists — this database has been through it
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, total REAL NOT NULL
+            )
+        ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS transaction_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, transaction_id INTEGER,
+                item_name TEXT, quantity INTEGER, price REAL
+            )
+        ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS announcements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, message TEXT NOT NULL
+            )
+        ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS suggestions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, message TEXT NOT NULL
+            )
+        ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,
+                description TEXT NOT NULL, amount REAL NOT NULL
+            )
+        ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL
+            )
+        ''')
+        # Key/value store for admin-editable config, e.g. the Venmo handle.
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY, value TEXT NOT NULL
+            )
+        ''')
+        # One row per restock event; sales are reported between these dates.
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS restocks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS inventory (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
-            category TEXT NOT NULL, price REAL NOT NULL, stock INTEGER NOT NULL,
-            max_stock INTEGER NOT NULL DEFAULT 0
-        )
-    ''')
-    # Migration: add max_stock column to existing databases
-    try:
-        cursor.execute('ALTER TABLE inventory ADD COLUMN max_stock INTEGER NOT NULL DEFAULT 0')
-        cursor.execute('UPDATE inventory SET max_stock = stock WHERE max_stock = 0')
-    except Exception:
-        pass  # Column already exists
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, total REAL NOT NULL
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS transaction_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, transaction_id INTEGER,
-            item_name TEXT, quantity INTEGER, price REAL
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS announcements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, message TEXT NOT NULL
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS suggestions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            message TEXT NOT NULL
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS expenses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT NOT NULL,
-            description TEXT NOT NULL,
-            amount REAL NOT NULL
-        )
-    ''')
-    # --- NEW: Categories Table ---
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS categories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL
-        )
-    ''')
-    # --- Settings Table (key/value store for admin-editable config) ---
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY, value TEXT NOT NULL
-        )
-    ''')
-    # --- Restocks Table (one row per restock event) ---
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS restocks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT NOT NULL UNIQUE
-        )
-    ''')
+        # Inventory is addressed by name everywhere (update, delete, checkout),
+        # so two rows sharing a name make every one of those operations hit
+        # both: selling 5 units would deduct 5 from each. Enforce uniqueness in
+        # the database. On a database that already holds duplicates the index
+        # cannot be built — warn loudly rather than merging rows automatically,
+        # since only a manager knows which row holds the real count.
+        try:
+            cur.execute(
+                'CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_name ON inventory(name)')
+        except sqlite3.IntegrityError:
+            dupes = cur.execute(
+                'SELECT name, COUNT(*) FROM inventory GROUP BY name HAVING COUNT(*) > 1'
+            ).fetchall()
+            print('WARNING: duplicate inventory names present, uniqueness NOT enforced:')
+            for name, count in dupes:
+                print(f'  {count}x "{name}"')
+            print('  Merge them in the admin panel, then restart to enable the guard.')
 
-    # Inventory is addressed by name everywhere (update, delete, checkout), so
-    # two rows sharing a name make every one of those operations hit both:
-    # selling 5 units would deduct 5 from each row. Enforce uniqueness at the
-    # database level. On a database that already contains duplicates the index
-    # cannot be built — warn loudly rather than merging rows automatically,
-    # since only a manager knows which row holds the real count.
-    try:
-        cursor.execute(
-            'CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_name ON inventory(name)')
-    except sqlite3.IntegrityError:
-        dupes = cursor.execute(
-            'SELECT name, COUNT(*) FROM inventory GROUP BY name HAVING COUNT(*) > 1'
-        ).fetchall()
-        print('WARNING: duplicate inventory names present, uniqueness NOT enforced:')
-        for name, count in dupes:
-            print(f'  {count}x "{name}"')
-        print('  Merge them in the admin panel, then restart to enable the guard.')
+        _seed_starter_data(cur)
 
-    # Inject Starter Data
-    cursor.execute('SELECT COUNT(*) FROM categories')
-    if cursor.fetchone()[0] == 0:
-        # Pre-fill standard categories
-        cats = [('Drinks',), ('Shelf Snacks',), ('Microwave',), ('Frozen',), ('Candy',), ('Other',)]
-        cursor.executemany('INSERT INTO categories (name) VALUES (?)', cats)
-        
-        sample_items = [
-            ('White Monster', 'Drinks', 3.00, 24), ('Celsius (Peach)', 'Drinks', 2.75, 20),
-            ('Cup Noodles', 'Microwave', 1.50, 30), ('Shin Ramyun', 'Microwave', 2.00, 25),
-            ('Ben & Jerry\'s', 'Frozen', 5.50, 10), ('Ice Cream Sand.', 'Frozen', 2.00, 15),
-            ('Quest Bar', 'Shelf Snacks', 2.50, 20), ('Doritos (Nacho)', 'Shelf Snacks', 1.50, 15)
-        ]
-        cursor.executemany('INSERT INTO inventory (name, category, price, stock, max_stock) VALUES (?, ?, ?, ?, ?)',
-                           [(n, c, p, s, s) for n, c, p, s in sample_items])
-        seed_ts = datetime.datetime.now().strftime("%m/%d/%Y · %I:%M %p")
-        cursor.execute('INSERT INTO announcements (date, message) VALUES (?, ?)', (seed_ts, "Welcome to the new digital company store. Tap the screen to start your order!"))
-        conn.commit()
 
-    conn.close()
-    print("Database upgraded with Categories and Delete functionality.")
+def _seed_starter_data(cur):
+    """Populate a brand-new database so a fresh clone has something to show."""
+    cur.execute('SELECT COUNT(*) FROM categories')
+    if cur.fetchone()[0] != 0:
+        return
 
-def ensure_suggestions_table():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS suggestions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            message TEXT NOT NULL
-        )
-    ''')
-    conn.commit(); conn.close()
+    categories = [('Drinks',), ('Shelf Snacks',), ('Microwave',),
+                  ('Frozen',), ('Candy',), ('Other',)]
+    cur.executemany('INSERT INTO categories (name) VALUES (?)', categories)
 
-# --- INVENTORY & TRANSACTIONS ---
-def get_inventory():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, name, category, price, stock FROM inventory WHERE stock > 0')
-    items = cursor.fetchall(); conn.close()
-    return items
+    sample_items = [
+        ('White Monster', 'Drinks', 3.00, 24), ('Celsius (Peach)', 'Drinks', 2.75, 20),
+        ('Cup Noodles', 'Microwave', 1.50, 30), ('Shin Ramyun', 'Microwave', 2.00, 25),
+        ("Ben & Jerry's", 'Frozen', 5.50, 10), ('Ice Cream Sand.', 'Frozen', 2.00, 15),
+        ('Quest Bar', 'Shelf Snacks', 2.50, 20), ('Doritos (Nacho)', 'Shelf Snacks', 1.50, 15),
+    ]
+    # An item's first stock level becomes its restock baseline (max_stock).
+    cur.executemany(
+        'INSERT INTO inventory (name, category, price, stock, max_stock) VALUES (?, ?, ?, ?, ?)',
+        [(n, c, p, s, s) for n, c, p, s in sample_items])
+
+    cur.execute('INSERT INTO announcements (date, message) VALUES (?, ?)',
+                (datetime.datetime.now().strftime('%m/%d/%Y · %I:%M %p'),
+                 'Welcome to the new digital company store. Tap the screen to start your order!'))
+
+
+# ── Inventory ─────────────────────────────────────────────────────────────────
 
 def get_all_inventory():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, name, category, price, stock, max_stock FROM inventory')
-    items = cursor.fetchall(); conn.close()
-    return items
+    """Returns [(id, name, category, price, stock, max_stock), ...]."""
+    with _cursor() as cur:
+        return cur.execute(
+            'SELECT id, name, category, price, stock, max_stock FROM inventory').fetchall()
+
 
 def add_inventory_item(name, category, price, stock):
     name = name.strip()
@@ -148,49 +178,48 @@ def add_inventory_item(name, category, price, stock):
         raise ValueError('Item name cannot be blank.')
     if price < 0 or stock < 0:
         raise ValueError('Price and stock cannot be negative.')
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    # Checked here as well as by the unique index: the index is missing on any
-    # database that still holds duplicates, and this message is the one the
-    # manager actually sees in the admin panel.
-    existing = cursor.execute('SELECT 1 FROM inventory WHERE name = ?', (name,)).fetchone()
-    if existing:
-        conn.close()
-        raise ValueError(f'"{name}" is already in inventory — use Update to change it.')
-    try:
-        cursor.execute('INSERT INTO inventory (name, category, price, stock, max_stock) VALUES (?, ?, ?, ?, ?)',
-                       (name, category, price, stock, stock))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        conn.rollback()
-        raise ValueError(f'"{name}" is already in inventory — use Update to change it.')
-    finally:
-        conn.close()
+
+    duplicate = f'"{name}" is already in inventory — use Update to change it.'
+    with _cursor(commit=True) as cur:
+        # Checked here as well as by the unique index: the index is absent on
+        # any database that still holds duplicates, and this is the message the
+        # manager actually sees in the admin panel.
+        if cur.execute('SELECT 1 FROM inventory WHERE name = ?', (name,)).fetchone():
+            raise ValueError(duplicate)
+        try:
+            cur.execute(
+                'INSERT INTO inventory (name, category, price, stock, max_stock) '
+                'VALUES (?, ?, ?, ?, ?)',
+                (name, category, price, stock, stock))
+        except sqlite3.IntegrityError:
+            raise ValueError(duplicate)
+
 
 def update_inventory_item(name, category, price, stock):
     if price < 0 or stock < 0:
         raise ValueError('Price and stock cannot be negative.')
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        'UPDATE inventory SET category = ?, price = ?, stock = ?, max_stock = MAX(max_stock, ?) WHERE name = ?',
-        (category, price, stock, stock, name)
-    )
-    conn.commit(); conn.close()
+    with _cursor(commit=True) as cur:
+        # max_stock only ever grows: it is the item's restock baseline, so
+        # selling down to 2 must not redefine "full" as 2.
+        cur.execute(
+            'UPDATE inventory SET category = ?, price = ?, stock = ?, '
+            'max_stock = MAX(max_stock, ?) WHERE name = ?',
+            (category, price, stock, stock, name))
 
-# --- NEW: Delete Item ---
+
 def delete_inventory_item(name):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM inventory WHERE name = ?', (name,))
-    conn.commit(); conn.close()
+    with _cursor(commit=True) as cur:
+        cur.execute('DELETE FROM inventory WHERE name = ?', (name,))
+
+
+# ── Sales ─────────────────────────────────────────────────────────────────────
 
 def _whole_quantity(name, details):
     """Extract a whole-number quantity from one cart line, or raise.
 
     Truncating would be wrong here: a request for 2.7 units is malformed, and
     silently selling 2 hides the defect behind a confusing "prices changed"
-    message downstream when the client's total no longer matches.
+    message downstream.
     """
     try:
         raw = details['quantity']
@@ -214,7 +243,7 @@ def log_transaction(cart_dict, total_amount=None):
     Prices and the order total come from the database, never from the client.
     The kiosk posts whatever total it computed, and every analytics figure
     (revenue, profit, margin, average order) derives from that number — so a
-    tampered or stale client could book a $3.00 sale as $0.01.
+    tampered or stale client could otherwise book a $3.00 sale as $0.01.
 
     total_amount, when supplied, is treated as a claim to be checked rather
     than a value to store: a mismatch means the kiosk's prices went stale
@@ -226,14 +255,12 @@ def log_transaction(cart_dict, total_amount=None):
         # tx_count — the divisor behind avg_order on the analytics page.
         raise ValueError('Cart is empty.')
 
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    try:
+    with _cursor(commit=True) as cur:
         priced = []
         for name, details in cart_dict.items():
             qty = _whole_quantity(name, details)
-            cursor.execute('SELECT stock, price FROM inventory WHERE name = ?', (name,))
-            row = cursor.fetchone()
+            row = cur.execute('SELECT stock, price FROM inventory WHERE name = ?',
+                              (name,)).fetchone()
             if row is None:
                 raise ValueError(f'{name} is no longer in inventory.')
             stock, price = row
@@ -248,267 +275,239 @@ def log_transaction(cart_dict, total_amount=None):
                 claimed = round(float(total_amount), 2)
             except (TypeError, ValueError):
                 raise ValueError('Invalid order total.')
-            if abs(claimed - server_total) > 0.005:
+            if abs(claimed - server_total) > CENT_TOLERANCE:
                 raise ValueError('Prices changed — please review your order.')
 
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute('INSERT INTO transactions (timestamp, total) VALUES (?, ?)',
-                       (timestamp, server_total))
-        transaction_id = cursor.lastrowid
+        cur.execute('INSERT INTO transactions (timestamp, total) VALUES (?, ?)',
+                    (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), server_total))
+        transaction_id = cur.lastrowid
+
         for name, qty, price in priced:
-            cursor.execute('INSERT INTO transaction_items (transaction_id, item_name, quantity, price) VALUES (?, ?, ?, ?)',
-                           (transaction_id, name, qty, price))
-            # The stock check above ran in autocommit, before this transaction
-            # opened, so a concurrent sale could have consumed the units since.
-            # Re-check inside the UPDATE itself: if the row no longer has the
-            # stock, it matches nothing and we roll the whole sale back rather
-            # than driving stock negative.
-            cursor.execute(
+            cur.execute(
+                'INSERT INTO transaction_items (transaction_id, item_name, quantity, price) '
+                'VALUES (?, ?, ?, ?)',
+                (transaction_id, name, qty, price))
+            # The stock check above ran before this transaction opened, so a
+            # concurrent sale could have taken the units since. Re-check inside
+            # the UPDATE itself: if the row no longer has the stock it matches
+            # nothing, and the whole sale rolls back rather than going negative.
+            cur.execute(
                 'UPDATE inventory SET stock = stock - ? WHERE name = ? AND stock >= ?',
                 (qty, name, qty))
-            if cursor.rowcount != 1:
+            if cur.rowcount != 1:
                 raise ValueError(f'{name} just sold out — please review your order.')
-        conn.commit()
+
         return server_total
-    except:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
 
-def get_total_revenue():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT SUM(total) FROM transactions')
-    revenue = cursor.fetchone()[0]; conn.close()
-    return revenue if revenue else 0.0
 
-def get_recent_transactions(limit=50):
-    """Fetches the most recent transactions and their associated items."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    # Get the overarching transactions (Newest first)
-    cursor.execute('SELECT id, timestamp, total FROM transactions ORDER BY id DESC LIMIT ?', (limit,))
-    tx_rows = cursor.fetchall()
-    
+def get_recent_transactions(limit=TRANSACTION_LIMIT):
+    """Most recent transactions, newest first, each with its line items.
+
+    Returns [{'id', 'timestamp', 'total', 'items': [(qty, name, price), ...]}].
+    """
+    with _cursor() as cur:
+        # One query, not one per transaction. The previous version issued a
+        # follow-up SELECT for every row returned, which dominated the cost of
+        # the admin page's 8-second poll.
+        rows = cur.execute('''
+            SELECT t.id, t.timestamp, t.total, ti.quantity, ti.item_name, ti.price
+            FROM (SELECT id, timestamp, total FROM transactions
+                  ORDER BY id DESC LIMIT ?) AS t
+            LEFT JOIN transaction_items ti ON ti.transaction_id = t.id
+            ORDER BY t.id DESC
+        ''', (limit,)).fetchall()
+
     transactions = []
-    for tx in tx_rows:
-        tx_id, timestamp, total = tx
-        # For each transaction, grab the specific items bought
-        cursor.execute('SELECT quantity, item_name, price FROM transaction_items WHERE transaction_id = ?', (tx_id,))
-        items = cursor.fetchall()
-        
-        transactions.append({
-            'id': tx_id,
-            'timestamp': timestamp,
-            'total': total,
-            'items': items
-        })
-        
-    conn.close()
+    by_id = {}
+    for tx_id, timestamp, total, qty, item_name, price in rows:
+        transaction = by_id.get(tx_id)
+        if transaction is None:
+            transaction = {'id': tx_id, 'timestamp': timestamp, 'total': total, 'items': []}
+            by_id[tx_id] = transaction
+            transactions.append(transaction)
+        # LEFT JOIN yields a NULL row for a transaction with no line items.
+        if item_name is not None:
+            transaction['items'].append((qty, item_name, price))
     return transactions
 
-# --- ANNOUNCEMENTS & CATEGORIES ---
-def get_announcements():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT date, message FROM announcements ORDER BY id DESC LIMIT 15')
-    news = cursor.fetchall(); conn.close()
-    return news
 
-def add_announcement(message):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    timestamp = datetime.datetime.now().strftime("%m/%d/%Y · %I:%M %p")
-    cursor.execute('INSERT INTO announcements (date, message) VALUES (?, ?)', (timestamp, message))
-    conn.commit(); conn.close()
+def get_transaction_count():
+    with _cursor() as cur:
+        return cur.execute('SELECT COUNT(*) FROM transactions').fetchone()[0]
 
-# --- SUGGESTIONS & FEEDBACK ---
-def add_suggestion(message):
-    clean_message = message.strip()
-    if not clean_message:
-        raise ValueError('Suggestion cannot be blank.')
 
-    ensure_suggestions_table()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cursor.execute('INSERT INTO suggestions (timestamp, message) VALUES (?, ?)', (timestamp, clean_message))
-    conn.commit(); conn.close()
+def get_total_revenue():
+    with _cursor() as cur:
+        revenue = cur.execute('SELECT SUM(total) FROM transactions').fetchone()[0]
+    return revenue or 0.0
 
-def get_suggestions(limit=50):
-    ensure_suggestions_table()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, timestamp, message FROM suggestions ORDER BY id DESC LIMIT ?', (limit,))
-    suggestions = cursor.fetchall(); conn.close()
-    return suggestions
-
-# --- Settings (key/value) ---
-def get_setting(key, default=''):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT value FROM settings WHERE key = ?', (key,))
-    row = cursor.fetchone(); conn.close()
-    return row[0] if row else default
-
-def set_setting(key, value):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, value))
-    conn.commit(); conn.close()
-
-# --- Restock Tracking ---
-def add_restock(date_str):
-    """date_str: YYYY-MM-DD.  Silently ignores duplicate dates."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('INSERT OR IGNORE INTO restocks (date) VALUES (?)', (date_str,))
-    conn.commit(); conn.close()
-
-def get_restocks():
-    """Returns [(id, 'YYYY-MM-DD'), ...] sorted ascending by date."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, date FROM restocks ORDER BY date ASC')
-    rows = cursor.fetchall(); conn.close()
-    return rows
-
-def delete_restock(restock_id):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM restocks WHERE id = ?', (restock_id,))
-    conn.commit(); conn.close()
 
 def get_sales_for_period(start_date, end_date=None):
-    """
-    Aggregate units sold + revenue between restock dates.
-    start_date inclusive, end_date exclusive (the day of the next restock).
-    end_date=None means through present.
-    Returns [(item_name, total_qty, total_rev), ...] sorted by qty DESC.
-    """
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    if end_date:
-        cursor.execute('''
-            SELECT ti.item_name, SUM(ti.quantity) AS qty,
-                   SUM(ti.quantity * ti.price)    AS rev
-            FROM transaction_items ti
-            JOIN transactions t ON ti.transaction_id = t.id
-            WHERE DATE(t.timestamp) >= ? AND DATE(t.timestamp) < ?
-            GROUP BY ti.item_name
-            ORDER BY qty DESC
-        ''', (start_date, end_date))
-    else:
-        cursor.execute('''
-            SELECT ti.item_name, SUM(ti.quantity) AS qty,
-                   SUM(ti.quantity * ti.price)    AS rev
-            FROM transaction_items ti
-            JOIN transactions t ON ti.transaction_id = t.id
-            WHERE DATE(t.timestamp) >= ?
-            GROUP BY ti.item_name
-            ORDER BY qty DESC
-        ''', (start_date,))
-    rows = cursor.fetchall(); conn.close()
-    return rows
+    """Units sold and revenue per item between two restock dates.
 
-# --- NEW: Category Functions ---
+    start_date is inclusive; end_date is exclusive (the day of the next
+    restock). end_date=None means "through the present".
+    Returns [(item_name, total_qty, total_rev), ...] sorted by qty descending.
+    """
+    clause = 'DATE(t.timestamp) >= ?'
+    params = [start_date]
+    if end_date:
+        clause += ' AND DATE(t.timestamp) < ?'
+        params.append(end_date)
+
+    with _cursor() as cur:
+        return cur.execute(f'''
+            SELECT ti.item_name, SUM(ti.quantity) AS qty, SUM(ti.quantity * ti.price) AS rev
+            FROM transaction_items ti
+            JOIN transactions t ON ti.transaction_id = t.id
+            WHERE {clause}
+            GROUP BY ti.item_name
+            ORDER BY qty DESC
+        ''', params).fetchall()
+
+
+# ── Announcements ─────────────────────────────────────────────────────────────
+
+def get_announcements():
+    with _cursor() as cur:
+        return cur.execute(
+            'SELECT date, message FROM announcements ORDER BY id DESC LIMIT ?',
+            (ANNOUNCEMENT_LIMIT,)).fetchall()
+
+
+def add_announcement(message):
+    with _cursor(commit=True) as cur:
+        cur.execute('INSERT INTO announcements (date, message) VALUES (?, ?)',
+                    (datetime.datetime.now().strftime('%m/%d/%Y · %I:%M %p'), message))
+
+
+# ── Suggestions (read-only) ───────────────────────────────────────────────────
+# The kiosk's suggestion box was removed; entries collected while it was live
+# are retained and still shown in the admin panel.
+
+def get_suggestions(limit=SUGGESTION_LIMIT):
+    with _cursor() as cur:
+        return cur.execute(
+            'SELECT id, timestamp, message FROM suggestions ORDER BY id DESC LIMIT ?',
+            (limit,)).fetchall()
+
+
+# ── Settings ──────────────────────────────────────────────────────────────────
+
+def get_setting(key, default=''):
+    with _cursor() as cur:
+        row = cur.execute('SELECT value FROM settings WHERE key = ?', (key,)).fetchone()
+    return row[0] if row else default
+
+
+def set_setting(key, value):
+    with _cursor(commit=True) as cur:
+        cur.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, value))
+
+
+# ── Restocks ──────────────────────────────────────────────────────────────────
+
+def add_restock(date_str):
+    """date_str: YYYY-MM-DD. Silently ignores a date already logged."""
+    with _cursor(commit=True) as cur:
+        cur.execute('INSERT OR IGNORE INTO restocks (date) VALUES (?)', (date_str,))
+
+
+def get_restocks():
+    """Returns [(id, 'YYYY-MM-DD'), ...] oldest first."""
+    with _cursor() as cur:
+        return cur.execute('SELECT id, date FROM restocks ORDER BY date ASC').fetchall()
+
+
+def delete_restock(restock_id):
+    with _cursor(commit=True) as cur:
+        cur.execute('DELETE FROM restocks WHERE id = ?', (restock_id,))
+
+
+# ── Categories ────────────────────────────────────────────────────────────────
+
 def get_categories():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT name FROM categories ORDER BY name')
-    cats = [row[0] for row in cursor.fetchall()]; conn.close()
-    return cats
+    with _cursor() as cur:
+        return [row[0] for row in
+                cur.execute('SELECT name FROM categories ORDER BY name').fetchall()]
+
 
 def add_category(name):
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO categories (name) VALUES (?)', (name,))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        pass # Ignores if you try to add a duplicate category
-    finally:
-        conn.close()
+    """Adding a category that already exists is a no-op, not an error."""
+    with _cursor(commit=True) as cur:
+        cur.execute('INSERT OR IGNORE INTO categories (name) VALUES (?)', (name,))
 
-# --- EXPENSES ---
+
+# ── Expenses ──────────────────────────────────────────────────────────────────
+
 def add_expense(date, description, amount):
     if amount < 0:
         raise ValueError('Amount cannot be negative.')
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO expenses (date, description, amount) VALUES (?, ?, ?)',
-                   (date, description, amount))
-    conn.commit(); conn.close()
+    with _cursor(commit=True) as cur:
+        cur.execute('INSERT INTO expenses (date, description, amount) VALUES (?, ?, ?)',
+                    (date, description, amount))
+
 
 def delete_expense(expense_id):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM expenses WHERE id = ?', (expense_id,))
-    conn.commit(); conn.close()
+    with _cursor(commit=True) as cur:
+        cur.execute('DELETE FROM expenses WHERE id = ?', (expense_id,))
 
-def get_expense_log(limit=100):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, date, description, amount FROM expenses ORDER BY id DESC LIMIT ?', (limit,))
-    rows = cursor.fetchall(); conn.close()
-    return rows
+
+def get_expense_log(limit=EXPENSE_LIMIT):
+    with _cursor() as cur:
+        return cur.execute(
+            'SELECT id, date, description, amount FROM expenses ORDER BY id DESC LIMIT ?',
+            (limit,)).fetchall()
+
 
 def get_total_expenses():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT SUM(amount) FROM expenses')
-    result = cursor.fetchone()[0]; conn.close()
-    return result if result else 0.0
+    with _cursor() as cur:
+        total = cur.execute('SELECT SUM(amount) FROM expenses').fetchone()[0]
+    return total or 0.0
 
-# --- ANALYTICS ---
-def get_transaction_count():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM transactions')
-    count = cursor.fetchone()[0]; conn.close()
-    return count
 
-def get_top_items(limit=10):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT item_name, SUM(quantity) AS total_qty, SUM(quantity * price) AS total_rev
-        FROM transaction_items
-        GROUP BY item_name
-        ORDER BY total_qty DESC
-        LIMIT ?
-    ''', (limit,))
-    rows = cursor.fetchall(); conn.close()
-    return rows  # [(name, qty, revenue), ...]
+# ── Analytics ─────────────────────────────────────────────────────────────────
+
+def get_top_items(limit=TOP_ITEMS_LIMIT):
+    """Returns [(name, units_sold, revenue), ...] best-selling first."""
+    with _cursor() as cur:
+        return cur.execute('''
+            SELECT item_name, SUM(quantity) AS total_qty, SUM(quantity * price) AS total_rev
+            FROM transaction_items
+            GROUP BY item_name
+            ORDER BY total_qty DESC
+            LIMIT ?
+        ''', (limit,)).fetchall()
+
 
 def get_category_revenue():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT COALESCE(i.category, 'Unknown') AS category,
-               SUM(ti.quantity * ti.price) AS total_rev
-        FROM transaction_items ti
-        LEFT JOIN inventory i ON ti.item_name = i.name
-        GROUP BY category
-        ORDER BY total_rev DESC
-    ''')
-    rows = cursor.fetchall(); conn.close()
-    return rows  # [(category, revenue), ...]
+    """Returns [(category, revenue), ...] highest first.
 
-def get_daily_revenue(days=7):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT DATE(timestamp) AS day, SUM(total) AS day_total
-        FROM transactions
-        WHERE DATE(timestamp) >= DATE('now', ?)
-        GROUP BY day
-        ORDER BY day ASC
-    ''', (f'-{days - 1} days',))
-    rows = cursor.fetchall(); conn.close()
-    return rows  # [(date_str, revenue), ...]
+    Items sold and later deleted from inventory have no category to join
+    against, so they are grouped under 'Unknown' rather than dropped.
+    """
+    with _cursor() as cur:
+        return cur.execute('''
+            SELECT COALESCE(i.category, 'Unknown') AS category,
+                   SUM(ti.quantity * ti.price) AS total_rev
+            FROM transaction_items ti
+            LEFT JOIN inventory i ON ti.item_name = i.name
+            GROUP BY category
+            ORDER BY total_rev DESC
+        ''').fetchall()
 
-if __name__ == "__main__":
+
+def get_daily_revenue(days=REVENUE_CHART_DAYS):
+    """Returns [(YYYY-MM-DD, revenue), ...] oldest first. Days with no sales are absent."""
+    with _cursor() as cur:
+        return cur.execute('''
+            SELECT DATE(timestamp) AS day, SUM(total) AS day_total
+            FROM transactions
+            WHERE DATE(timestamp) >= DATE('now', ?)
+            GROUP BY day
+            ORDER BY day ASC
+        ''', (f'-{days - 1} days',)).fetchall()
+
+
+if __name__ == '__main__':
     init_db()
